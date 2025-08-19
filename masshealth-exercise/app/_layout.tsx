@@ -5,7 +5,7 @@ import { jwtDecode } from 'jwt-decode';
 import * as SecureStore from 'expo-secure-store';
 import { router } from 'expo-router';
 import { ACCESS_TOKEN, REFRESH_TOKEN } from '@/constants';
-import { publicApi } from '../api'; // Use publicApi for token refresh
+import { publicApi } from '../api';
 
 export default function RootLayout() {
   const [isLoading, setIsLoading] = useState(true);
@@ -23,7 +23,6 @@ export default function RootLayout() {
         return false;
       }
 
-      // Use publicApi for token refresh (no auth headers needed)
       const res = await publicApi.post('/api/auth/token/refresh/', { 
         refresh: refreshToken 
       });
@@ -36,7 +35,6 @@ export default function RootLayout() {
       return false;
     } catch (error) {
       console.log('Token refresh error:', error);
-      // Clean up invalid tokens
       await SecureStore.deleteItemAsync(ACCESS_TOKEN);
       await SecureStore.deleteItemAsync(REFRESH_TOKEN);
       return false;
@@ -58,11 +56,9 @@ export default function RootLayout() {
       const now = Date.now() / 1000;
 
       if (tokenExpiration && tokenExpiration < now) {
-        // Token expired, try to refresh
         const refreshSuccessful = await refreshToken();
         setIsAuthenticated(refreshSuccessful);
       } else {
-        // Token is still valid
         setIsAuthenticated(true);
       }
     } catch (error) {
@@ -73,18 +69,17 @@ export default function RootLayout() {
     }
   };
 
-  // Navigate based on auth status once we know it
   useEffect(() => {
     if (!isLoading) {
       if (isAuthenticated) {
-        router.replace('/(authenticated)/app');
+        // Go directly to the tabs, not to a redirect page
+        router.replace('/(authenticated)/(tabs)/home');
       } else {
-        router.replace('/entry'); // or '/login' depending on your flow
+        router.replace('/entry');
       }
     }
   }, [isLoading, isAuthenticated]);
 
-  // Show loading screen while checking auth
   if (isLoading) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>

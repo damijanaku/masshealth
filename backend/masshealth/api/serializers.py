@@ -61,5 +61,21 @@ class UserProfileSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = CustomUser
-        fields = ('id', 'email', 'username', 'full_name', 'is_verified', 'date_joined')
+        fields = ('id', 'email', 'username', 'full_name', 'is_verified', 'date_joined', 'metadata')
         read_only_fields = ('id', 'email', 'date_joined', 'is_verified')
+
+class UserMetadataSerializer(serializers.ModelSerializer):
+    profile_image_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = UserMetadata
+        fields = ['username', 'age', 'gender', 'height', 'weight', 'fitness_experience', 
+                 'profile_image', 'profile_image_url', 'created_at', 'updated_at']
+        read_only_fields = ['created_at', 'updated_at']
+
+    def get_profile_image_url(self, obj):
+        if obj.profile_image:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.profile_image.url)
+        return None

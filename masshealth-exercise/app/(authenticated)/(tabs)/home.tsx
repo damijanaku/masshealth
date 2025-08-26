@@ -1,4 +1,4 @@
-import { View, Text, SafeAreaView, StyleSheet, Image, Dimensions, ScrollView, Platform } from 'react-native';
+import { View, Text, SafeAreaView, StyleSheet, Image, Dimensions, ScrollView, Platform, TouchableOpacity } from 'react-native';
 import React, { useEffect, useState } from 'react';
 import HomeIcon from '../../../assets/tsxicons/homenavbaricon';
 import FireIcon from '../../../assets/tsxicons/fireicon';
@@ -19,6 +19,7 @@ const home = () => {
   const [customAlertMessage, setCustomAlertMessage] = useState('');
   // Initialize with today's date
   const [selectedDate, setSelectedDate] = useState(new Date());
+  const [image, setImage] = useState<string | null>(null);
 
   // Use selectedDate instead of the fixed date
   //const androidHealthData = useHealthData(selectedDate);
@@ -36,6 +37,12 @@ const home = () => {
         name: userData.full_name || userData.username || userData.email || 'User',
         username: userData.username || '',
       });
+
+      if (userData.profile_image_url) {
+        setImage(userData.profile_image_url)
+      } else {
+        console.log("No profile image found");
+      }
 
       console.log('Profile loaded:', userData);
     } catch (error) {
@@ -103,13 +110,15 @@ const home = () => {
             <Text style={styles.userText}>Hello, {profile.name}</Text>
             <Text style={styles.userDate}>{today.toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'long' })}</Text>
           </View>
-          <View style={styles.circle}>
-            <Image
-              source={require('../../../assets/placeholderprofilepic.jpg')}
-              resizeMode="cover"
-              style={styles.image}
-            />
-          </View>
+          <TouchableOpacity style={styles.circle} >
+          {image ? (
+            <Image source={{ uri: image }} style={styles.profileImage} />
+          ) : (
+            <View style={styles.placeholderContainer}>
+              <Text style={styles.placeholderText}>Tap to add photo</Text>
+            </View>
+          )}
+        </TouchableOpacity>
         </View>
 
         <View style={styles.health}>
@@ -202,14 +211,15 @@ const styles = StyleSheet.create({
      fontSize: 16, 
      color: '#A4A4A8' 
     },
-  circle: {
-     width: 60, 
-     height: 60, 
-     borderRadius: 40, 
-     overflow: 'hidden', 
-     justifyContent: 'center', 
-     alignItems: 'center', 
-     backgroundColor: '#ccc' 
+    circle: {
+      width: 100,           
+      height: 100,
+      borderRadius: 50,  
+      overflow: 'hidden',   
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: '#f0f0f0', 
+      margin: 5,
     },
   image: {
      width: '100%', 
@@ -275,6 +285,25 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 14,
     opacity: 0.8
+  },
+  profileImage: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+  },
+  placeholderContainer: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f0f0f0',
+  },
+  placeholderText: {
+    fontSize: 12,
+    color: '#666',
+    textAlign: 'center',
+    paddingHorizontal: 10,
   },
 });
 

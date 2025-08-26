@@ -103,16 +103,100 @@ const Profile = () => {
   }, []);
 
   const fetchPendingRequests = async () => {
+    try {
+      setIsLoading(true);
+      const response = await privateApi.get('/api/auth/pending-requests/');
+
+      if (response.data.success) {
+        setPendingRequests(response.data.requests || []);
+      }
+    } catch (error) {
+      console.error("Error catching pending requests", error);
+
+    } finally {      
+      setIsLoading(false);
+
+    }
   };
 
   const fetchFriends = async () => {
+    try {
+      setIsLoading(true)
+      const response =  await privateApi.get('/api/auth/friends-list');
+      
+      if (response.data.success) {
+        setFriends(response.data.friends)
+      }
+    } catch (error) {
+      console.error("Error catching friends", error);
+    } finally {
+      setIsLoading(false)
+    }
   };
 
-  const handleAcceptRequest = async (connectionId: string) => {
+  const handleAcceptRequest = async (requestId: string) => {
+    try {
+      const response = await privateApi.post(`/api/auth/accept-friend-request/${requestId}/`);
+      
+      if (response.data.success) {
+        setCustomAlertMessage('Friend request accepted!');
+        fetchPendingRequests(); // Refresh the list
+        fetchFriends(); // Refresh friends list
+      } else {
+        setCustomAlertMessage(response.data.message);
+      }
+    } catch (error) {
+      setCustomAlertMessage('Error accepting friend request');
+    } finally {
+      setCustomAlertVisible(true);
+    }
   };
 
   const handleSendRequest = async () => {
+    if (!friendUsername.trim()) {
+      setCustomAlertMessage('Please enter a username');
+      setCustomAlertVisible(true);
+      return;
+    }
+  
+    try {
+      setIsLoading(true);
+      
+      // First search for the user
+      const searchResponse = await privateApi.post('/api/auth/search-users/', {
+        username: friendUsername
+      });
+  
+      if (searchResponse.data.success && searchResponse.data.users.length > 0) {
+        const user = searchResponse.data.users[0];
+        
+        // Send friend request
+        const response = await privateApi.post(`/api/auth/send-friend-request/${user.id}/`);
+        
+        if (response.data.success) {
+          setCustomAlertMessage('Friend request sent successfully!');
+          setFriendUsername('');
+        } else {
+          setCustomAlertMessage(response.data.message);
+        }
+      } else {
+        setCustomAlertMessage('User not found');
+      }
+    } catch (error) {
+      setCustomAlertMessage('Error sending friend request');
+    } finally {
+      setIsLoading(false);
+      setCustomAlertVisible(true);
+    }
   };
+
+  useEffect(() => {
+    if (activeTab === 'requests') {
+      fetchPendingRequests();
+    } else if (activeTab === 'friends') {
+      fetchFriends();
+    }
+  }, [activeTab]);
 
   const pickImage = async () => {
     let result = await ImagePicker.launchImageLibraryAsync({

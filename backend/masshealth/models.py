@@ -46,6 +46,8 @@ class CustomUser(AbstractUser):
     is_verified = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    friends = models.ManyToManyField("self", blank=True, symmetrical=False)
+
 
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = ['full_name']
@@ -120,3 +122,11 @@ class UserMetadata(models.Model):
     class Meta:
         verbose_name = "User Metadata"
         verbose_name_plural = "User Metadata"
+
+class FriendRequest(models.Model):
+    from_user = models.ForeignKey(
+        CustomUser, related_name="from_user", on_delete=models.CASCADE
+    )
+    to_user = models.ForeignKey(
+        CustomUser, related_name="to_user", on_delete=models.CASCADE
+    )

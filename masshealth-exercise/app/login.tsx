@@ -2,7 +2,6 @@ import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { router } from 'expo-router'; 
 import React, { useState, useEffect } from 'react'; 
 import { SafeAreaView } from 'react-native-safe-area-context';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import GoogleButton from '../components/GoogleButton';
 import Input from '../components/Input';
 import DefButton from '../components/DefButton';
@@ -30,7 +29,7 @@ const login = () => {
         await SecureStore.setItem(ACCESS_TOKEN, res.data.access)
         await SecureStore.setItem(REFRESH_TOKEN, res.data.refresh)
         
-        router.replace("/(authenticated)/app")
+        router.replace("/(authenticated)/(tabs)/home")
 
     } catch (error) {
         Alert.alert("Login Failed", JSON.stringify((error as any).response?.data));

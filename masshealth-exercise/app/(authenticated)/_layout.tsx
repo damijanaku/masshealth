@@ -1,18 +1,17 @@
-import { router, Stack, Tabs } from "expo-router";
-import { useEffect } from "react";
+import { Stack } from "expo-router";
+import ProtectedRoute from "@/components/ProtectedRoute";
 
-export default function TabsLayout() {
+export default function AuthenticatedLayout() {
   return (
-    <Stack 
-  screenOptions={{ headerShown: false }}
-    >
-     
-      <Stack.Screen name="app" 
-                  options={{ title: "app", 
-                  }} />
-      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />      
-       
-      
-    </Stack>
+    <ProtectedRoute>
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="tags" options={{ title: "tags" }} />
+        <Stack.Screen name="userstats" options={{ title: "userstats" }} />
+        <Stack.Screen name="map" options={{ title: "Map" }} />
+        <Stack.Screen name="createroutine" options={{title: "CreateRoutine"}} />
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="routinepreview" />
+      </Stack>
+    </ProtectedRoute>
   );
 }

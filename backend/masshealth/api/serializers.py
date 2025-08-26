@@ -58,8 +58,37 @@ class UserLoginSerializer(serializers.Serializer):
 
 class UserProfileSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source='metadata.username', read_only=True)
-
+    profile_image_url = serializers.SerializerMethodField()
+    
     class Meta:
         model = CustomUser
-        fields = ('id', 'email', 'username', 'full_name', 'is_verified', 'date_joined')
-        read_only_fields = ('id', 'email', 'date_joined', 'is_verified')
+        fields = ('id', 'email', 'username', 'full_name', 'is_verified', 'date_joined', 'profile_image_url')
+    
+    def get_profile_image_url(self, obj):
+        try:
+            if hasattr(obj, 'metadata') and obj.metadata.profile_image:
+                request = self.context.get('request')
+                if request:
+                    return request.build_absolute_uri(obj.metadata.profile_image.url)
+                return obj.metadata.profile_image.url
+        except (AttributeError, UserMetadata.DoesNotExist):
+            pass
+        return None
+
+class UserMetadataSerializer(serializers.ModelSerializer):
+    profile_image_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = UserMetadata
+        fields = ['username', 'age', 'gender', 'height', 'weight', 'fitness_experience', 
+                 'profile_image', 'profile_image_url', 'created_at', 'updated_at']
+        read_only_fields = ['created_at', 'updated_at']
+
+    def get_profile_image_url(self, obj):
+        if obj.profile_image:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.profile_image.url)
+            return obj.profile_image.url
+        return None
+

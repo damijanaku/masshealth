@@ -1,5 +1,26 @@
 from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.db import models
+from django.core.exceptions import ValidationError
+import os
+import uuid
+from PIL import Image
+
+
+def validate_image_size(image):
+    max_size = 5 * 1024 * 1024
+    if image.size > max_size:
+        raise ValidationError("Image file too large")
+
+def validate_image_format(image):
+    valid_extensions = ['.jpg', '.jpeg', '.png']
+    ext = os.path.splitext(image.name)[1].lower()
+    if ext not in valid_extensions:
+        raise ValidationError("Invalid image format")
+    
+def profile_image_path(instance, filename):
+    ext = filename.split('.')[-1]
+    filename = f"{uuid.uuid4()}.{ext}"
+    return f'profile_images/user_{instance.user.id}/{filename}'
 
 # custom manager
 class CustomUserManager(BaseUserManager):
@@ -57,6 +78,41 @@ class UserMetadata(models.Model):
     fitness_experience = models.CharField(max_length=20, choices=FITNESS_EXPERIENCE_CHOICES, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    profile_image = models.ImageField(
+        upload_to=profile_image_path,
+        null=True,
+        blank=True,
+        validators=[validate_image_size, validate_image_format],
+        help_text="Upload a profile image (max 5MB)"
+    )
+
+    def save(self, *args, **kwargs):
+        if self.pk:
+            try:
+                old_instance = UserMetadata.objects.get(pk=self.pk)
+                if old_instance.profile_image and old_instance.profile_image != self.profile_image:
+                    if os.path.isfile(old_instance.profile_image.path):
+                        os.remove(old_instance.profile_image.path)
+            except UserMetadata.DoesNotExist:
+                pass
+        super().save(*args, **kwargs)
+
+        if self.profile_image:
+            self.resize_image()
+    
+    def resize_image(self):
+        if not self.profile_image:
+            return
+
+        img = Image.open(self.profile_image.path)
+
+        if img.mode == 'RGBA':
+            img = img.convert('RGB')
+        
+        img.thumbnail((400, 400), Image.LANCZOS)
+        img.save(self.profile_image.path, 'JPEG', quality=85)
+
 
     def __str__(self):
         return f"{self.user.full_name} ({self.user.email})"

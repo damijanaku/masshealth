@@ -1,14 +1,13 @@
 from rest_framework import status, generics, permissions
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import login
 from django.shortcuts import get_object_or_404
 from .serializers import (UserRegistrationSerializer, UserLoginSerializer, 
                          UserProfileSerializer, UserMetadataSerializer,
-                         MuscleGroupSerializer, WorkoutSerializer, 
-                         RoutineSerializer, RoutineDetailSerializer)
+                         WorkoutSerializer, RoutineSerializer, RoutineDetailSerializer)
 from ..models import CustomUser, UserMetadata, FriendRequest, Workout, Routine, RoutineWorkout, MuscleGroup
 from .forms import ProfilePicForm
 import os
@@ -333,19 +332,7 @@ def search_users(request):
             'error': f'An error occurred: {str(e)}'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-from rest_framework import status, generics, permissions
-from rest_framework.decorators import api_view, permission_classes
-from rest_framework.response import Response
-from rest_framework.permissions import AllowAny, IsAuthenticated
-from rest_framework_simplejwt.tokens import RefreshToken
-from django.contrib.auth import login
-from django.shortcuts import get_object_or_404
-from .serializers import (UserRegistrationSerializer, UserLoginSerializer, 
-                         UserProfileSerializer, UserMetadataSerializer,
-                         WorkoutSerializer, RoutineSerializer, RoutineDetailSerializer)
-from ..models import CustomUser, UserMetadata, FriendRequest, Workout, Routine, RoutineWorkout, MuscleGroup
-from .forms import ProfilePicForm
-import os
+
 
 
 

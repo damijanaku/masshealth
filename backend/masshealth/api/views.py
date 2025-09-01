@@ -7,7 +7,8 @@ from django.contrib.auth import login
 from django.shortcuts import get_object_or_404
 from .serializers import (UserRegistrationSerializer, UserLoginSerializer, 
                          UserProfileSerializer, UserMetadataSerializer,
-                         WorkoutSerializer, RoutineSerializer, RoutineDetailSerializer)
+                         MuscleGroupSerializer, WorkoutSerializer, 
+                         RoutineSerializer, RoutineDetailSerializer)
 from ..models import CustomUser, UserMetadata, FriendRequest, Workout, Routine, RoutineWorkout, MuscleGroup
 from .forms import ProfilePicForm
 import os

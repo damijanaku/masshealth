@@ -130,3 +130,124 @@ class FriendRequest(models.Model):
     to_user = models.ForeignKey(
         CustomUser, related_name="to_user", on_delete=models.CASCADE
     )
+
+class MuscleGroup(models.Model):
+    name = models.CharField(max_length=50, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    def __str__(self):
+        return self.name
+    
+    class Meta:
+        ordering = ['name']
+
+class Routine(models.Model):
+    name = models.CharField(max_length=200)
+    description = models.TextField(blank=True, null=True)
+    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='routines', null=True)
+    is_public = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    def __str__(self):
+        return f"{self.name} - {self.user.get_full_name()}"
+    
+    class Meta:
+        ordering = ['-created_at']
+
+class Workout(models.Model):
+    EXPERIENCE_LEVELS = [
+        ('beginner', 'Beginner'),
+        ('intermediate', 'Intermediate'), 
+        ('advanced', 'Advanced'),
+    ]
+    
+    EXERCISE_TYPES = [
+        ('strength', 'Strength'),
+        ('warmup', 'Warmup'),
+        ('smr', 'SMR'),
+        ('plyometrics', 'Plyometrics'),
+        ('olympic_weightlifting', 'Olympic Weightlifting'),
+        ('conditioning', 'Conditioning'),
+        ('activation', 'Activation'),  
+    ]
+    
+    EQUIPMENT_REQUIRED = [  
+        ('bands', 'Bands'),
+        ('barbell', 'Barbell'),
+        ('bench', 'Bench'),
+        ('bodyweight', 'Bodyweight'),
+        ('box', 'Box'),
+        ('cable', 'Cable'),
+        ('chains', 'Chains'),
+        ('dumbbell', 'Dumbbell'), 
+        ('ez_bar', 'EZ Bar'),
+        ('exercise_ball', 'Exercise Ball'),
+        ('foam_roll', 'Foam Roll'),
+        ('hip_thruster', 'Hip Thruster'),
+        ('jump_rope', 'Jump Rope'),
+        ('kettle_bells', 'Kettle Bells'),
+        ('lacrosse_ball', 'Lacrosse Ball'),
+        ('landmine', 'Landmine'),
+        ('machine', 'Machine'),
+        ('medicine_ball', 'Medicine Ball'),
+        ('other', 'Other'),
+        ('sled', 'Sled'),
+        ('tiger_tail', 'Tiger Tail'),
+        ('trap_bar', 'Trap Bar'),
+        ('valslide', 'Valslide'),
+    ]
+    
+    MECHANICS = [
+        ('compound', 'Compound'),
+        ('isolation', 'Isolation'),
+    ]
+    
+    FORCE_TYPES = [
+        ('compression', 'Compression'),
+        ('dynamic_stretching', 'Dynamic Stretching'),
+        ('hinge_bilateral', 'Hinge (Bilateral)'),
+        ('hinge_unilateral', 'Hinge (Unilateral)'),
+        ('isometric', 'Isometric'),
+        ('press_bilateral', 'Press (Bilateral)'),
+        ('pull', 'Pull'),  
+        ('pull_bilateral', 'Pull (Bilateral)'),
+        ('pull_unilateral', 'Pull (Unilateral)'),
+        ('push', 'Push'),
+        ('push_bilateral', 'Push (Bilateral)'),
+        ('push_unilateral', 'Push (Unilateral)'),
+        ('static_stretching', 'Static Stretching'),
+    ]
+    
+    name = models.CharField(max_length=200)
+    video_url = models.URLField(max_length=500)
+    exercise_type = models.CharField(max_length=30, choices=EXERCISE_TYPES, blank=True)  
+    equipment_required = models.CharField(max_length=30, choices=EQUIPMENT_REQUIRED, blank=True)  
+    mechanics = models.CharField(max_length=20, choices=MECHANICS, blank=True) 
+    force_type = models.CharField(max_length=30, choices=FORCE_TYPES, blank=True) 
+    experience_level = models.CharField(max_length=20, choices=EXPERIENCE_LEVELS, default='beginner', blank=True)
+    muscle_group = models.ForeignKey(MuscleGroup, on_delete=models.CASCADE, related_name='workouts', blank=True)
+    duration_minutes = models.PositiveIntegerField(help_text="Duration in minutes", blank=True, null=True)
+    sets = models.PositiveIntegerField(default=1, blank=True)
+    reps = models.PositiveIntegerField(null=True, blank=True, help_text="Reps per set (optional)")
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    def __str__(self):
+        return f"{self.name}"
+    
+    class Meta:
+        ordering = ['name']
+
+class RoutineWorkout(models.Model):
+    routine = models.ForeignKey(Routine, on_delete=models.CASCADE, related_name='routine_workouts')
+    workout = models.ForeignKey(Workout, on_delete=models.CASCADE, related_name='workout_routines')
+    order = models.PositiveIntegerField(default=0, help_text="Order of workout in routine")
+    rest_between_sets = models.PositiveIntegerField(default=60, help_text="Rest time in seconds")
+    notes = models.TextField(blank=True, help_text="Specific notes for this workout in this routine")
+    
+    class Meta:
+        ordering = ['routine', 'order']
+        unique_together = ['routine', 'workout', 'order']  
+    
+    def __str__(self):
+        return f"{self.routine.name} - {self.workout.name}"

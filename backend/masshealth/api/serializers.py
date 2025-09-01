@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth import authenticate
 from django.contrib.auth.password_validation import validate_password
-from ..models import CustomUser, UserMetadata
+from ..models import CustomUser, Workout, UserMetadata, MuscleGroup, Routine, RoutineWorkout
 
 class UserRegistrationSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, validators=[validate_password])
@@ -92,3 +92,46 @@ class UserMetadataSerializer(serializers.ModelSerializer):
             return obj.profile_image.url
         return None
 
+class MuscleGroupSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MuscleGroup
+        fields = ['id', 'name']
+
+class WorkoutSerializer(serializers.ModelSerializer):
+    muscle_group = MuscleGroupSerializer(read_only=True)
+    
+    class Meta:
+        model = Workout
+        fields = [
+            'id', 'name', 'video_url', 'exercise_type', 
+            'equipment_required', 'mechanics', 'force_type', 
+            'experience_level', 'muscle_group', 'duration_minutes', 
+            'sets', 'reps', 'created_at'
+        ]
+
+class RoutineWorkoutSerializer(serializers.ModelSerializer):
+    workout = WorkoutSerializer(read_only=True)
+    
+    class Meta:
+        model = RoutineWorkout
+        fields = ['workout', 'order', 'rest_between_sets', 'notes']
+
+class RoutineSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Routine
+        fields = [
+            'id', 'name', 'description', 'is_public', 
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['created_at', 'updated_at']
+
+class RoutineDetailSerializer(serializers.ModelSerializer):
+    workouts = RoutineWorkoutSerializer(source='routine_workouts', many=True, read_only=True)
+    user = serializers.StringRelatedField(read_only=True)
+    
+    class Meta:
+        model = Routine
+        fields = [
+            'id', 'name', 'description', 'user', 'is_public', 
+            'workouts', 'created_at', 'updated_at'
+        ]

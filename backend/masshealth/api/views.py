@@ -508,6 +508,7 @@ def create_routine_with_workouts(request):
         )
 
 @api_view(['GET'])
+@permission_classes([IsAuthenticated])
 def get_workout_by_muscle_group(request, muscle_group_name):
     try:
         muscle_group = MuscleGroup.objects.get(name__iexact=muscle_group_name)

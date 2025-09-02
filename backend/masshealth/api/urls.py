@@ -25,7 +25,7 @@ urlpatterns = [
     path('workouts/muscle-group/<str:muscle_group_name>/', 
          views.get_workout_by_muscle_group, name='workout-by-muscle-group'),
     
-    # Muscle Groups URL (ADD THIS)
+    # Muscle Groups URL 
     path('muscle-groups/', views.get_muscle_groups, name='muscle-groups'),
     
     # Routine URLs
@@ -36,4 +36,16 @@ urlpatterns = [
     path('routines/<int:pk>/delete/', views.RoutineDeleteView.as_view(), name='routine-delete'),
     path('routines/create-with-workouts/', 
          views.create_routine_with_workouts, name='routine-create-with-workouts'),
+
+     path('routines/<int:routine_id>/workouts/<int:workout_order>/', 
+         views.update_routine_workout, name='update-routine-workout'),      
+     path('workout-modes/', 
+         views.get_workout_modes, name='workout-modes'),
+
+     path('routines/<int:routine_id>/workouts/', 
+         views.get_routine_workouts, name='get-routine-workouts'),
+     path('routines/<int:routine_id>/workouts/add/', 
+         views.add_workout_to_routine, name='add-workout-to-routine'),
+     path('routines/<int:routine_id>/workouts/<int:workout_order>/delete/', 
+         views.remove_workout_from_routine, name='remove-workout-from-routine'),
 ]

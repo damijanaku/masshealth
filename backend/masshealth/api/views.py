@@ -5,10 +5,11 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import login
 from django.shortcuts import get_object_or_404
-from .serializers import (UserRegistrationSerializer, UserLoginSerializer, 
+from django.db import models  # This is the correct import for Django models
+from .serializers import (RoutineWorkoutSerializer, UserRegistrationSerializer, UserLoginSerializer, 
                          UserProfileSerializer, UserMetadataSerializer,
                          MuscleGroupSerializer, WorkoutSerializer, 
-                         RoutineSerializer, RoutineDetailSerializer)
+                         RoutineSerializer, RoutineWorkoutCreateUpdateSerializer, RoutineDetailSerializer)
 from ..models import CustomUser, UserMetadata, FriendRequest, Workout, Routine, RoutineWorkout, MuscleGroup
 from .forms import ProfilePicForm
 import os
@@ -17,7 +18,6 @@ class RegisterView(generics.CreateAPIView):
     queryset = CustomUser.objects.all()
     serializer_class = UserRegistrationSerializer
     permission_classes = [AllowAny]
-
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
@@ -111,7 +111,6 @@ def upload_profile_image(request):
             'error': f'An error occurred: {str(e)}'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
-
 @api_view(['DELETE'])
 @permission_classes([permissions.IsAuthenticated])
 def remove_profile_image(request):
@@ -143,7 +142,6 @@ def remove_profile_image(request):
             'error': f'An error occurred: {str(e)}'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-
 @api_view(['GET'])
 @permission_classes([permissions.IsAuthenticated])
 def get_user_metadata(request):
@@ -165,9 +163,8 @@ def get_user_metadata(request):
             'success': False,
             'error': f'An error occurred: {str(e)}'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-    
-# Add these views to your existing views.py
 
+# Friend request views
 @api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])
 def send_friend_request(request, userId):
@@ -333,10 +330,7 @@ def search_users(request):
             'error': f'An error occurred: {str(e)}'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-
-
-
-
+# Workout views
 class WorkoutListView(generics.ListAPIView):
     queryset = Workout.objects.all()
     serializer_class = WorkoutSerializer  
@@ -358,6 +352,37 @@ class WorkoutListView(generics.ListAPIView):
             
         return queryset
 
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_workout_by_muscle_group(request, muscle_group_name):
+    try:
+        muscle_group = MuscleGroup.objects.get(name__iexact=muscle_group_name)
+        workouts = Workout.objects.filter(muscle_group=muscle_group)
+        serializer = WorkoutSerializer(workouts, many=True)
+        return Response(serializer.data)
+    
+    except MuscleGroup.DoesNotExist:
+        return Response(
+            {'error': f'Muscle group "{muscle_group_name}" not found'}, 
+            status=status.HTTP_404_NOT_FOUND
+        )
+    
+@api_view(['GET'])
+def get_muscle_groups(request):
+    try:
+        muscle_groups = MuscleGroup.objects.all()
+        serializer = MuscleGroupSerializer(muscle_groups, many=True)
+        return Response({
+            'success': True,
+            'data': serializer.data
+        })
+    except Exception as e:
+        return Response({
+            'success': False,
+            'error': str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+# Routine views
 class RoutineCreateView(generics.CreateAPIView):
     serializer_class = RoutineSerializer
     permission_classes = [permissions.IsAuthenticated]
@@ -390,7 +415,7 @@ class RoutineListView(generics.ListAPIView):
     serializer_class = RoutineSerializer
     permission_classes = [permissions.IsAuthenticated]
 
-    def get_queryset(self):  # Removed incorrect decorators
+    def get_queryset(self):
         return Routine.objects.filter(user=self.request.user)
 
 class RoutineUpdateView(generics.UpdateAPIView):
@@ -433,25 +458,6 @@ class RoutineDeleteView(generics.DestroyAPIView):
 def create_routine_with_workouts(request):
     """
     Create a routine with workouts in a single request
-    
-    Expected JSON format:
-    {
-        "name": "My Routine",
-        "description": "Description here",
-        "is_public": false,
-        "workouts": [
-            {
-                "workout_id": 1,
-                "rest_between_sets": 60,
-                "notes": "Go slow on this one"
-            },
-            {
-                "workout_id": 5,
-                "rest_between_sets": 90,
-                "notes": ""
-            }
-        ]
-    }
     """
     try:
         # Create routine
@@ -467,7 +473,6 @@ def create_routine_with_workouts(request):
             
             # Add workouts to routine
             workout_data = request.data.get('workouts', [])
-            routine_workouts = []
             
             for index, workout_info in enumerate(workout_data):
                 workout_id = workout_info.get('workout_id')
@@ -486,14 +491,22 @@ def create_routine_with_workouts(request):
                         status=status.HTTP_400_BAD_REQUEST
                     )
                 
-                routine_workout = RoutineWorkout.objects.create(
-                    routine=routine,
-                    workout=workout,
-                    order=index + 1,
-                    rest_between_sets=workout_info.get('rest_between_sets', 60),
-                    notes=workout_info.get('notes', '')
-                )
-                routine_workouts.append(routine_workout)
+                # Prepare routine workout data
+                routine_workout_data = {
+                    'routine': routine,
+                    'workout': workout,
+                    'order': index + 1,
+                    'workout_mode': workout_info.get('workout_mode', 'reps_sets'),
+                    'custom_sets': workout_info.get('custom_sets'),
+                    'custom_reps': workout_info.get('custom_reps'),
+                    'timer_duration': workout_info.get('timer_duration'),
+                    'duration_minutes': workout_info.get('duration_minutes'),
+                    'rest_between_sets': workout_info.get('rest_between_sets', 60),
+                    'notes': workout_info.get('notes', '')
+                }
+                
+                # Create routine workout directly
+                RoutineWorkout.objects.create(**routine_workout_data)
             
             # Return detailed routine data
             detailed_serializer = RoutineDetailSerializer(routine)
@@ -507,32 +520,138 @@ def create_routine_with_workouts(request):
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
+# Enhanced routine workout management views
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
-def get_workout_by_muscle_group(request, muscle_group_name):
+def get_routine_workouts(request, routine_id):
+    """Get all workouts for a specific routine"""
     try:
-        muscle_group = MuscleGroup.objects.get(name__iexact=muscle_group_name)
-        workouts = Workout.objects.filter(muscle_group=muscle_group)
-        serializer = WorkoutSerializer(workouts, many=True)
+        routine = get_object_or_404(Routine, id=routine_id, user=request.user)
+        routine_workouts = routine.routine_workouts.all()
+        serializer = RoutineWorkoutSerializer(routine_workouts, many=True)
         return Response(serializer.data)
-    
-    except MuscleGroup.DoesNotExist:
-        return Response(
-            {'error': f'Muscle group "{muscle_group_name}" not found'}, 
-            status=status.HTTP_404_NOT_FOUND
-        )
-    
-@api_view(['GET'])
-def get_muscle_groups(request):
-    try:
-        muscle_groups = MuscleGroup.objects.all()
-        serializer = MuscleGroupSerializer(muscle_groups, many=True)
-        return Response({
-            'success': True,
-            'data': serializer.data
-        })
     except Exception as e:
-        return Response({
-            'success': False,
-            'error': str(e)
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['PUT'])
+@permission_classes([IsAuthenticated])
+def update_routine_workout(request, routine_id, workout_order):
+    """
+    Update a specific workout within a routine
+    """
+    try:
+        routine = get_object_or_404(Routine, id=routine_id, user=request.user)
+        routine_workout = get_object_or_404(
+            RoutineWorkout, 
+            routine=routine, 
+            order=workout_order
+        )
+        
+        serializer = RoutineWorkoutCreateUpdateSerializer(
+            routine_workout, 
+            data=request.data, 
+            partial=True
+        )
+        
+        if serializer.is_valid():
+            serializer.save()
+            
+            # Return updated data
+            response_serializer = RoutineWorkoutSerializer(routine_workout)
+            return Response(response_serializer.data, status=status.HTTP_200_OK)
+        else:
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            
+    except Exception as e:
+        return Response(
+            {'error': str(e)}, 
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def add_workout_to_routine(request, routine_id):
+    """Add a new workout to an existing routine"""
+    try:
+        routine = get_object_or_404(Routine, id=routine_id, user=request.user)
+        
+        # Get the next order number
+        max_order = routine.routine_workouts.aggregate(
+            max_order=models.Max('order')
+        )['max_order'] or 0
+        
+        # Prepare data with the routine and next order
+        workout_data = request.data.copy()
+        workout_data['order'] = max_order + 1
+        
+        # Get the workout
+        workout_id = workout_data.get('workout_id')
+        if not workout_id:
+            return Response({'error': 'workout_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        workout = get_object_or_404(Workout, id=workout_id)
+        
+        # Create routine workout
+        routine_workout = RoutineWorkout.objects.create(
+            routine=routine,
+            workout=workout,
+            order=workout_data['order'],
+            workout_mode=workout_data.get('workout_mode', 'reps_sets'),
+            custom_sets=workout_data.get('custom_sets'),
+            custom_reps=workout_data.get('custom_reps'),
+            timer_duration=workout_data.get('timer_duration'),
+            duration_minutes=workout_data.get('duration_minutes'),
+            rest_between_sets=workout_data.get('rest_between_sets', 60),
+            notes=workout_data.get('notes', '')
+        )
+        
+        serializer = RoutineWorkoutSerializer(routine_workout)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+        
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+def remove_workout_from_routine(request, routine_id, workout_order):
+    """Remove a workout from a routine and reorder remaining workouts"""
+    try:
+        routine = get_object_or_404(Routine, id=routine_id, user=request.user)
+        routine_workout = get_object_or_404(
+            RoutineWorkout, 
+            routine=routine, 
+            order=workout_order
+        )
+        
+        # Delete the workout
+        routine_workout.delete()
+        
+        # Reorder remaining workouts
+        remaining_workouts = RoutineWorkout.objects.filter(
+            routine=routine,
+            order__gt=workout_order
+        ).order_by('order')
+        
+        for i, rw in enumerate(remaining_workouts):
+            rw.order = workout_order + i
+            rw.save()
+        
+        return Response({'message': 'Workout removed successfully'}, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_workout_modes(request):
+    """
+    Return available workout modes for frontend selection
+    """
+    from ..models import RoutineWorkout
+    
+    return Response({
+        'workout_modes': [
+            {'value': mode[0], 'label': mode[1]} 
+            for mode in RoutineWorkout.WORKOUT_MODES
+        ]
+    })

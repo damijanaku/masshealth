@@ -4,7 +4,7 @@ from django.core.exceptions import ValidationError
 import os
 import uuid
 from PIL import Image
-
+from django.core.exceptions import ValidationError
 
 def validate_image_size(image):
     max_size = 5 * 1024 * 1024
@@ -238,10 +238,50 @@ class Workout(models.Model):
     class Meta:
         ordering = ['name']
 
+
 class RoutineWorkout(models.Model):
+    WORKOUT_MODES = [
+        ('reps_sets', 'Reps & Sets'),
+        ('timer', 'Timer'),
+        ('duration', 'Duration Only'),  
+    ]
     routine = models.ForeignKey(Routine, on_delete=models.CASCADE, related_name='routine_workouts')
     workout = models.ForeignKey(Workout, on_delete=models.CASCADE, related_name='workout_routines')
     order = models.PositiveIntegerField(default=0, help_text="Order of workout in routine")
+    
+    # Workout execution mode
+    workout_mode = models.CharField(
+        max_length=20,
+        choices=WORKOUT_MODES,
+        default='reps_sets',
+        help_text="How this workout should be performed"
+    )
+
+    custom_sets = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="Override workout's default sets"
+    )
+
+    custom_reps = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="Override workout's default reps per set"
+    )
+
+    timer_duration = models.PositiveIntegerField(
+        null=True, 
+        blank=True, 
+        help_text="Timer duration in seconds (for timer mode)"
+    )
+    
+    # Add this missing field
+    duration_minutes = models.PositiveIntegerField(
+        null=True, 
+        blank=True, 
+        help_text="Custom duration in minutes (overrides workout default)"
+    )
+
     rest_between_sets = models.PositiveIntegerField(default=60, help_text="Rest time in seconds")
     notes = models.TextField(blank=True, help_text="Specific notes for this workout in this routine")
     
@@ -250,4 +290,60 @@ class RoutineWorkout(models.Model):
         unique_together = ['routine', 'workout', 'order']  
     
     def __str__(self):
-        return f"{self.routine.name} - {self.workout.name}"
+        return f"{self.routine.name} - {self.workout.name} ({self.get_workout_mode_display()})"
+    
+    def get_effective_sets(self):
+        if self.custom_sets is not None:
+            return self.custom_sets
+        elif self.workout.sets is not None:
+            return self.workout.sets
+        else:
+            # Sensible defaults based on workout type
+            if self.workout.exercise_type == 'strength':
+                return 3
+            elif self.workout.exercise_type in ['conditioning', 'plyometrics']:
+                return 4
+            else:
+                return 3  # General default
+
+    def get_effective_reps(self):
+        if self.custom_reps is not None:
+            return self.custom_reps
+        elif self.workout.reps is not None:
+            return self.workout.reps
+        else:
+            # Sensible defaults based on workout type
+            if self.workout.exercise_type == 'strength':
+                return 10
+            elif self.workout.exercise_type == 'conditioning':
+                return 15
+            elif self.workout.exercise_type == 'plyometrics':
+                return 8
+            else:
+                return 12  # General default
+    
+    def get_effective_duration(self):
+        if self.workout_mode == 'timer' and self.timer_duration:
+            return self.timer_duration / 60  # Convert seconds to minutes
+        elif self.duration_minutes is not None:
+            return self.duration_minutes
+        elif self.workout.duration_minutes is not None:
+            return self.workout.duration_minutes
+        else:
+            # Sensible defaults based on workout type
+            if self.workout.exercise_type in ['warmup', 'smr']:
+                return 5
+            elif self.workout.exercise_type == 'conditioning':
+                return 20
+            elif self.workout.exercise_type in ['strength', 'olympic_weightlifting']:
+                return 15
+            else:
+                return 10  # General default
+    
+    def clean(self):
+        if self.workout_mode == 'timer' and not self.timer_duration:
+            raise ValidationError({
+                'timer_duration': 'Timer duration is required when using timer mode'
+            })
+            
+            

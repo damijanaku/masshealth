@@ -111,10 +111,50 @@ class WorkoutSerializer(serializers.ModelSerializer):
 
 class RoutineWorkoutSerializer(serializers.ModelSerializer):
     workout = WorkoutSerializer(read_only=True)
+    effective_sets = serializers.SerializerMethodField()
+    effective_reps = serializers.SerializerMethodField() 
+    effective_duration = serializers.SerializerMethodField()
     
     class Meta:
         model = RoutineWorkout
-        fields = ['workout', 'order', 'rest_between_sets', 'notes']
+        fields = [
+            'id', 'workout', 'order', 'workout_mode',
+            'custom_sets', 'custom_reps', 'timer_duration', 'duration_minutes',
+            'rest_between_sets', 'notes',
+            'effective_sets', 'effective_reps', 'effective_duration'
+        ]
+    
+    def get_effective_sets(self, obj):
+        return obj.get_effective_sets()
+    
+    def get_effective_reps(self, obj):
+        return obj.get_effective_reps()
+    
+    def get_effective_duration(self, obj):
+        return obj.get_effective_duration()
+
+
+#seperate serializer for updating/creating   
+class RoutineWorkoutCreateUpdateSerializer(serializers.ModelSerializer):
+    
+    class Meta:
+        model = RoutineWorkout
+        fields = [
+            'workout', 'order', 'workout_mode',
+            'custom_sets', 'custom_reps', 'timer_duration', 'duration_minutes',
+            'rest_between_sets', 'notes'
+        ]
+    
+    def validate(self, attrs):
+        workout_mode = attrs.get('workout_mode', 'reps_sets')
+        
+        if workout_mode == 'timer':
+            if not attrs.get('timer_duration'):
+                raise serializers.ValidationError({
+                    'timer_duration': 'Timer duration is required when using timer mode'
+                })
+        
+        return attrs
 
 class RoutineSerializer(serializers.ModelSerializer):
     class Meta:
@@ -128,10 +168,30 @@ class RoutineSerializer(serializers.ModelSerializer):
 class RoutineDetailSerializer(serializers.ModelSerializer):
     workouts = RoutineWorkoutSerializer(source='routine_workouts', many=True, read_only=True)
     user = serializers.StringRelatedField(read_only=True)
+    total_estimated_duration = serializers.SerializerMethodField()
     
     class Meta:
         model = Routine
         fields = [
             'id', 'name', 'description', 'user', 'is_public', 
-            'workouts', 'created_at', 'updated_at'
+            'workouts', 'created_at', 'updated_at', 'total_estimated_duration'
         ]
+    
+    def get_total_estimated_duration(self, obj):
+        #total duration
+        total_minutes = 0
+        
+        for routine_workout in obj.routine_workouts.all():
+            # Get effective duration for this workout
+            duration = routine_workout.get_effective_duration()
+            if duration:
+                total_minutes += duration
+            
+            # Add rest time between sets (if applicable)
+            if routine_workout.workout_mode == 'reps_sets':
+                sets = routine_workout.get_effective_sets() or 1
+                if sets > 1:  # Rest time only applies between sets, not after the last set
+                    rest_minutes = (routine_workout.rest_between_sets * (sets - 1)) / 60
+                    total_minutes += rest_minutes
+        
+        return round(total_minutes, 1) if total_minutes else None

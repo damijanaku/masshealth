@@ -15,7 +15,7 @@ interface ExerciseInRoutineProps {
   time?: string;
   press?: boolean;
   emoji?: Svg;
-  destination: string; // navigate to on swipe
+  destination: "/exercisedescription"
   onPress?: () => void;
   isSelected?: boolean; 
   loading?: boolean;
@@ -23,7 +23,6 @@ interface ExerciseInRoutineProps {
 
 const ExerciseinRoutine: React.FC<ExerciseInRoutineProps> = ({ 
   exerciseName, 
-  overview,
   video,
   reps, 
   time, 
@@ -54,20 +53,17 @@ const ExerciseinRoutine: React.FC<ExerciseInRoutineProps> = ({
 
   // Handle navigation when swiped
   const handleSwipeOpen = () => {
-    // Close the swipeable after navigation
     if (swipeableRef.current) {
       swipeableRef.current.close();
     }
-    console.log(JSON.stringify(video))
-
     
-    // each instance of the component to navigate to a different route
+    console.log('Navigating with video data:', video);
+    
     router.push({
       pathname: destination,
       params: { 
-        exerciseName,
-        description: overview,
-        videoUrls: JSON.stringify(video)
+        exerciseName: exerciseName,
+        videoUrl: typeof video === 'string' ? video : JSON.stringify(video),
       }
     });
   };

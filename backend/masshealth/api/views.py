@@ -5,7 +5,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import login
 from django.shortcuts import get_object_or_404
-from django.db import models  # This is the correct import for Django models
+from django.db import models 
 from .serializers import (RoutineWorkoutSerializer, UserRegistrationSerializer, UserLoginSerializer, 
                          UserProfileSerializer, UserMetadataSerializer,
                          MuscleGroupSerializer, WorkoutSerializer, 
@@ -456,9 +456,6 @@ class RoutineDeleteView(generics.DestroyAPIView):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def create_routine_with_workouts(request):
-    """
-    Create a routine with workouts in a single request
-    """
     try:
         # Create routine
         routine_data = {
@@ -644,9 +641,6 @@ def remove_workout_from_routine(request, routine_id, workout_order):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_workout_modes(request):
-    """
-    Return available workout modes for frontend selection
-    """
     from ..models import RoutineWorkout
     
     return Response({

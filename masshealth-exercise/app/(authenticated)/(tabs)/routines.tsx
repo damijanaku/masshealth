@@ -1,5 +1,5 @@
 import { View, Text, StyleSheet } from 'react-native'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import React from 'react'
 import { useRouter } from 'expo-router'
 import { GestureHandlerRootView, ScrollView } from 'react-native-gesture-handler'
@@ -9,15 +9,56 @@ import SectionTitle from '@/components/SectionTitle'
 import CreateRoutineButton from '@/components/createRoutineButton'
 import Routinebutton from '@/components/RoutineButton'
 import RoutinePlaceholder from '@/components/RoutinePlaceholder'
+import privateApi from '@/api'
+import { useFocusEffect } from '@react-navigation/native';
+
+interface Routine {
+  id: number;
+  name: string;
+  description?: string;
+  is_public: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+interface RoutineButtonProps {
+  routineName: string;
+  routineId: number; 
+  playIcon?: boolean;
+  onPress: (routineName: string, routineId: number) => void; 
+}
 
 const routines = () => {
   const router = useRouter()
-  const [userRoutines, setUserRoutines] = useState<Array<{id: number, name: string}>>([])
+  const [userRoutines, setUserRoutines] = useState<Routine[]>([])
   const [loadingRoutines, setLoadingRoutines] = useState(true)
 
-  const navigateToPreview = (routineName: string) => {
-    router.push(`../routinepreview?routineName=${routineName}`);
-  };
+  
+const navigateToPreview = (routineName: string, routineId: number) => {
+  router.push(`../routinepreview?routineName=${encodeURIComponent(routineName)}&routineId=${routineId}`);
+};
+
+
+  const fetchRoutines = async () => {
+    setLoadingRoutines(true)
+    try {
+      console.log('Fetching routines...');
+      const response = await privateApi.get('/api/auth/routines')
+
+      setUserRoutines(response.data.results || [])
+      setLoadingRoutines(false)
+      console.log(response.data)
+    } catch (error) {
+      console.log("Error", error)
+      setLoadingRoutines(false)
+    }
+  }
+
+  useFocusEffect(
+    React.useCallback(() => {
+      fetchRoutines();
+    }, [])
+  );
 
   return (
       <GestureHandlerRootView>
@@ -40,7 +81,7 @@ const routines = () => {
                     <Routinebutton 
                       key={routine.id}
                       routineName={routine.name} 
-                      onPress={() => navigateToPreview(routine.name)} 
+                      onPress={() => navigateToPreview(routine.name, routine.id)} 
                     />
                   ))
                 ) : (

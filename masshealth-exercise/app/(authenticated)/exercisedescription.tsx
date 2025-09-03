@@ -10,18 +10,26 @@ import { useVideoPlayer, VideoView } from 'expo-video'
 import { Ionicons } from '@expo/vector-icons'; // Add this import
 
 const { width } = Dimensions.get('window');
-const videoWidth = Math.min(320, width - 40); 
+const videoWidth = width * 0.9
 const videoHeight = videoWidth * 0.6; 
+
+  interface ExerciseData {
+    name: string;
+    video_url: string | null;
+    secondary_muscles: string;
+    description: string;
+  }
 
 const ExcercisePreview = () => {   
   const params = useLocalSearchParams();
-  const { exerciseName, description, videoUrls } = params;
+  const { exerciseName, videoUrl, secondaryMuscles, description } = params;
   const [videoData, setVideoData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [mainVideoUrl, setMainVideoUrl] = useState<string | null>(null);
   const [videoType, setVideoType] = useState<string>('');
   const [videoLoading, setVideoLoading] = useState(true);
   const [refresh, setRefresh] = useState(0); // Add refresh counter
+  const [exercise, setExercise] = useState<ExerciseData | null>(null);
+  const [mainVideoUrl, setMainVideoUrl] = useState<string | null>(null);
 
   // Initialize player with the first video
   const player = useVideoPlayer(
@@ -32,18 +40,18 @@ const ExcercisePreview = () => {
     }
   );
 
-  // Add loading timeout effect - reduced to 2 seconds for better UX
+  // Add loading timeout effect 
   useEffect(() => {
     if (mainVideoUrl) {
       setVideoLoading(true);
       
       const timer = setTimeout(() => {
         setVideoLoading(false);
-      }, 2000);  // Reduced from 4s to 2s
+      }, 1);  
       
       return () => clearTimeout(timer);
     }
-  }, [mainVideoUrl, refresh]); // Include refresh in dependencies
+  }, [mainVideoUrl, refresh]); 
 
   // Add a refresh handler
   const handleRefresh = () => {
@@ -61,65 +69,49 @@ const ExcercisePreview = () => {
     );
   };
 
-  const isVimeoUrl = (url: string): boolean => {
-    return !!url && (
-      url.includes('vimeo.com') || 
-      url.includes('player.vimeo.com')
-    );
-  };
 
   useEffect(() => {
-    if (videoUrls) {
-      try {
-        let parsed;
-        
-        if (typeof videoUrls === 'string') {
-          parsed = JSON.parse(videoUrls);
-        } else if (typeof videoUrls === 'object') {
-          parsed = videoUrls;
-        } else {
-          parsed = null;
-        }
-        
-        if (parsed) {
-          setVideoData(parsed);
-          
-          // Get the first regular video URL prioritizing front, then side, then other
-          const preferredOrder = ['front', 'side', 'other'];
-          let foundVideo = false;
-          
-          // Try to find a video in the preferred order
-          for (const key of preferredOrder) {
-            if (parsed[key] && typeof parsed[key] === 'string') {
-              console.log(`Using ${key} video:`, parsed[key]);
-              setMainVideoUrl(parsed[key]);
-              setVideoType(key);
-              foundVideo = true;
-              break;
-            }
-          }
-          
-          // If no video found in preferred order, use any available video
-          if (!foundVideo) {
-            const keys = Object.keys(parsed);
-            for (const key of keys) {
-              const url = parsed[key];
-              if (url && typeof url === 'string') {
-                console.log(`Using ${key} video:`, url);
-                setMainVideoUrl(url);
-                setVideoType(key);
-                break;
-              }
-            }
-          }
-        }
-      } catch (e) {
-        console.error("Failed to parse video URLs", e);
-      }
-    }
+    console.log('Params received:', { exerciseName, videoUrl, secondaryMuscles, description });
     
-    setLoading(false);
-  }, [videoUrls]);
+    if (exerciseName) {
+      try {
+        // Parse video URL if it's JSON stringified
+        let parsedVideoUrl = videoUrl;
+        if (videoUrl && typeof videoUrl === 'string') {
+          try {
+            // Try to parse as JSON first
+            parsedVideoUrl = JSON.parse(videoUrl as string);
+          } catch {
+            // If parsing fails, use as string
+            parsedVideoUrl = videoUrl;
+          }
+        }
+        
+        const exerciseData: ExerciseData = {
+          name: exerciseName as string,
+          video_url: Array.isArray(parsedVideoUrl) ? parsedVideoUrl.join(',') : parsedVideoUrl,
+          secondary_muscles: secondaryMuscles as string || '',
+          description: description as string || ''
+        };
+        
+        console.log('Created exercise data:', exerciseData);
+        setExercise(exerciseData);
+        
+        if (parsedVideoUrl && typeof parsedVideoUrl === 'string') {
+          setMainVideoUrl(parsedVideoUrl);
+        }
+        
+        setLoading(false);
+      } catch (error) {
+        console.error('Error creating exercise data:', error);
+        setLoading(false);
+      }
+    } else {
+      console.log('No exerciseName found in params');
+      setLoading(false);
+    }
+  }, [exerciseName, videoUrl, secondaryMuscles, description]);
+    
 
   // Function to extract YouTube video ID from URL
   const getYoutubeVideoId = (url: string): string | null => {
@@ -269,15 +261,12 @@ const ExcercisePreview = () => {
         <View style={styles.videoWrapper}>
           {videoLoading && (
             <View style={styles.videoLoadingOverlay}>
-              <ActivityIndicator size="large" color="#6E49EB" />
               <Text style={styles.videoLoadingText}>Loading video...</Text>
             </View>
           )}
           
           {isYouTubeUrl(mainVideoUrl) 
             ? renderYouTubeVideo(mainVideoUrl)
-            : isVimeoUrl(mainVideoUrl) 
-              ? renderVimeoVideo(mainVideoUrl)
               : <VideoView 
                   style={styles.vwVideo}  
                   player={player}

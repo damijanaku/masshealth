@@ -7,183 +7,270 @@ import TimerIcon from '../../assets/tsxicons/timericon';
 import DoneIcon from '../../assets/tsxicons/doneicon';
 import { router } from 'expo-router';
 import { AnimatedCircularProgress } from 'react-native-circular-progress';
+import privateApi from '@/api';
 
 type Exercise = {
   key: string;
   excercise_id: number;
   exerciseName: string;
-  description?: string,
-  videoUrls?: any,
+  description?: string;
+  videoUrls?: any;
   reps: string;
   playWorkout: boolean;
   doneWorkout: boolean;
   is_set_type: boolean;
+  is_timer_type: boolean;
   num_of_sets: number;
   num_of_reps: number;
   time_held: number | null;
+  current_time: number | null; // For timer countdown
   remaining_sets: number;
   total_sets: number;
+  workout_mode: 'reps_sets' | 'timer' | 'duration';
 };
 
 type CurrentExerciseListProps = {
+  routineId?: number | null;
   routineName?: string;
 };
 
-const CurrentExerciseList = ({ routineName }: CurrentExerciseListProps) => {
+const CurrentExerciseList = ({ routineId, routineName }: CurrentExerciseListProps) => {
   const [listData, setListData] = useState<Exercise[]>([]);
   const [loading, setLoading] = useState(false);
+  const [activeTimerIndex, setActiveTimerIndex] = useState<number | null>(null);
   
   useEffect(() => {
-    if (routineName) {
-      fetchExercisesForRoutine(routineName);
+    if (routineId) {
+      fetchExercisesForRoutine(routineId);
     } else {
-      // Set default data 
       setListData([]);
-      
     }
-  }, [routineName]);
+  }, [routineId]);
+
+  // Timer effect for countdown
+  useEffect(() => {
+    let timer: ReturnType<typeof setInterval>;
+    
+    if (activeTimerIndex !== null) {
+      const exercise = listData[activeTimerIndex];
+      
+      if (exercise && exercise.playWorkout && exercise.is_timer_type && exercise.current_time !== null && exercise.current_time > 0) {
+        timer = setInterval(() => {
+          setListData(prevData => {
+            const updatedData = [...prevData];
+            const currentExercise = updatedData[activeTimerIndex];
+            
+            if (currentExercise.current_time !== null && currentExercise.current_time > 0) {
+              currentExercise.current_time -= 1;
+              currentExercise.reps = `${currentExercise.current_time}s`;
+              
+              // Timer completed
+              if (currentExercise.current_time === 0) {
+                currentExercise.playWorkout = false;
+                currentExercise.doneWorkout = true;
+                currentExercise.reps = "Completed";
+                setActiveTimerIndex(null);
+                
+                // Check if all exercises are done
+                setTimeout(() => {
+                  const allDone = updatedData.every(item => item.doneWorkout);
+                  if (allDone && routineName) {
+                    console.log('All exercises completed!');
+                  }
+                }, 100);
+              }
+            }
+            
+            return updatedData;
+          });
+        }, 1000);
+      }
+    }
+    
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [activeTimerIndex, listData]);
 
   const formatSetsReps = (exercise: Exercise) => {
     if (exercise.is_set_type) {
       return `${exercise.remaining_sets}×${exercise.num_of_reps}`;
+    } else if (exercise.is_timer_type) {
+      return exercise.current_time !== null ? `${exercise.current_time}s` : "Hold";
     }
-    return exercise.time_held ? `${exercise.time_held}s` : "Hold";
+    return "Hold";
   };
 
-  const fetchExercisesForRoutine = async (name: string) => {
+  const fetchExercisesForRoutine = async (routineId: number) => {
     try {
+      setLoading(true);
+      const response = await privateApi.get(`/api/auth/routines/${routineId}/`);
       
+      if (response.data && response.data.workouts) {
+        const workouts = response.data.workouts;
+        
+        const exercises: Exercise[] = workouts.map((workout: any, index: number) => {
+          const isSetType = workout.workout_mode === 'reps_sets';
+          const isTimerType = workout.workout_mode === 'timer';
+          const totalSets = workout.custom_sets || workout.effective_sets || 0;
+          const timerDuration = workout.timer_duration || workout.effective_duration || 0;
+          
+          return {
+            key: `exercise-${workout.id}-${index}`,
+            excercise_id: workout.workout.id,
+            exerciseName: workout.workout.name,
+            description: workout.notes,
+            videoUrls: workout.workout.video_url,
+            reps: isSetType ? `${totalSets}×${workout.custom_reps || workout.effective_reps}` : 
+                   isTimerType ? `${timerDuration}s` : 'Hold',
+            playWorkout: false,
+            doneWorkout: false,
+            is_set_type: isSetType,
+            is_timer_type: isTimerType,
+            num_of_sets: totalSets,
+            num_of_reps: workout.custom_reps || workout.effective_reps || 0,
+            time_held: isTimerType ? timerDuration : null,
+            current_time: isTimerType ? timerDuration : null,
+            remaining_sets: totalSets,
+            total_sets: totalSets,
+            workout_mode: workout.workout_mode
+          };
+        });
+        
+        setListData(exercises);
+      }
     } catch (error) {
+      console.error('Error fetching exercises for routine:', error);
     } finally {
+      setLoading(false);
     }
   };
 
-const togglePlayWorkout = (index: number) => {
-  setListData((prevData) => {
-    const currentItem = prevData[index];
-    
-    if (currentItem.doneWorkout) {
-      return prevData;
-    }
-    
-    if (!currentItem.playWorkout) {
-      return prevData.map((item, i) =>
-        i === index ? { ...item, playWorkout: true } : item
-      );
-    }
-    
-    // If it's already in play mode, we're completing this set
-    if (currentItem.remaining_sets > 1) {
-      // Decrease sets by 1 but stay in play mode
-      return prevData.map((item, i) =>
-        i === index ? { 
-          ...item, 
-          remaining_sets: item.remaining_sets - 1,
-          reps: formatSetsReps({...item, remaining_sets: item.remaining_sets - 1})
-        } : item
-      );
-    } 
-    // If this is the last set, mark it as done and check if all exercises are done
-    else if (currentItem.remaining_sets === 1) {
-      const updatedData = prevData.map((item, i) =>
-        i === index ? { 
-          ...item, 
-          playWorkout: false,
-          doneWorkout: true,
-          remaining_sets: 0,
-          reps: "Completed"
-        } : item
-      );
-      
-      // After updating this item, check if all exercises are now done
-      setTimeout(async () => {
-        const allDone = updatedData.every(item => item.doneWorkout);
-        if (allDone && routineName) {
-          console.log('All exercises completed via togglePlayWorkout! Updating routine...');
-          try {
-            const success = await updateRoutineCompletion(routineName);
-            console.log('Supabase update from togglePlayWorkout result:', success ? 'Success' : 'Failed');
-          } catch (error) {
-            console.error('Error updating routine from togglePlayWorkout:', error);
-          }
-        }
-      }, 100);
-      
-      return updatedData;
-    }
-    
-    // No sets remaining, keep as is
-    return prevData;
-  });
-};
-
- const markWorkoutAsDone = async (index: number) => {
-  try {
+  const togglePlayWorkout = (index: number) => {
     setListData((prevData) => {
-      // First, mark the current exercise as done
-      const updatedData = prevData.map((item, i) =>
-        i === index ? { 
-          ...item, 
-          doneWorkout: true, 
-          playWorkout: false,
-          remaining_sets: 0,
-          reps: "Completed"
-        } : item
-      );
+      const currentItem = prevData[index];
       
-      // Count completed exercises after the update
-      const completedCount = updatedData.filter(ex => ex.doneWorkout).length;
-      const totalExercises = updatedData.length;
-      
-      // Log progress with actual numbers
-      console.log(`Workout progress: ${completedCount}/${totalExercises}`);
-      
-      // Check if all exercises are completed
-      const allExercisesDone = completedCount === totalExercises;
-      
-      if (allExercisesDone && routineName) {
-        console.log('All exercises completed! Updating routine status...');
-        setTimeout(async () => {
-          const success = await updateRoutineCompletion(routineName);
-          if (success === false) {
-            console.warn('Failed to update routine completion status');
-          } else {
-            console.log('Routine marked as completed successfully');
-          }
-        }, 0);
+      if (currentItem.doneWorkout) {
+        return prevData;
       }
       
-      return updatedData;
+      // For timer exercises - start the countdown
+      if (currentItem.is_timer_type && !currentItem.playWorkout) {
+        const updatedData = prevData.map((item, i) =>
+          i === index ? { 
+            ...item, 
+            playWorkout: true,
+            current_time: item.time_held // Start the timer
+          } : item
+        );
+        
+        setActiveTimerIndex(index);
+        return updatedData;
+      }
+      
+      // For sets/reps exercises - handle click progression
+      if (currentItem.is_set_type) {
+        if (!currentItem.playWorkout) {
+          // Start the set
+          return prevData.map((item, i) =>
+            i === index ? { ...item, playWorkout: true } : item
+          );
+        }
+        
+        // Complete one set
+        if (currentItem.remaining_sets > 1) {
+          return prevData.map((item, i) =>
+            i === index ? { 
+              ...item, 
+              remaining_sets: item.remaining_sets - 1,
+              reps: formatSetsReps({...item, remaining_sets: item.remaining_sets - 1})
+            } : item
+          );
+        } 
+        // Complete the last set
+        else if (currentItem.remaining_sets === 1) {
+          const updatedData = prevData.map((item, i) =>
+            i === index ? { 
+              ...item, 
+              playWorkout: false,
+              doneWorkout: true,
+              remaining_sets: 0,
+              reps: "Completed"
+            } : item
+          );
+          
+          setTimeout(async () => {
+            const allDone = updatedData.every(item => item.doneWorkout);
+            if (allDone && routineName) {
+              console.log('All exercises completed!');
+            }
+          }, 100);
+          
+          return updatedData;
+        }
+      }
+      
+      return prevData;
     });
-  } catch (error) {
-    console.error('Error marking workout as done:', error);
-  }
-};
+  };
 
-const updateRoutineCompletion = async (routineName: string): Promise<boolean> => {
-  try {
-    // Add logic to update the routine completion status
-    console.log(`Updating routine completion for: ${routineName}`);
-    // Simulate success
-    return true;
-  } catch (error) {
-    console.error('Error updating routine completion:', error);
-    return false;
-  }
-};
+  const markWorkoutAsDone = async (index: number) => {
+    try {
+      setListData((prevData) => {
+        const updatedData = prevData.map((item, i) =>
+          i === index ? { 
+            ...item, 
+            doneWorkout: true, 
+            playWorkout: false,
+            remaining_sets: 0,
+            current_time: 0,
+            reps: "Completed"
+          } : item
+        );
+        
+        // Stop timer if this was the active timer
+        if (activeTimerIndex === index) {
+          setActiveTimerIndex(null);
+        }
+        
+        const completedCount = updatedData.filter(ex => ex.doneWorkout).length;
+        const totalExercises = updatedData.length;
+        
+        console.log(`Workout progress: ${completedCount}/${totalExercises}`);
+        
+        const allExercisesDone = completedCount === totalExercises;
+        
+        if (allExercisesDone && routineName) {
+          console.log('All exercises completed!');
+        }
+        
+        return updatedData;
+      });
+    } catch (error) {
+      console.error('Error marking workout as done:', error);
+    }
+  };
 
   const resetWorkout = (index: number) => {
     setListData((prevData) => {
       const item = prevData[index];
-      return prevData.map((item, i) =>
+      const resetData = prevData.map((item, i) =>
         i === index ? { 
           ...item, 
           doneWorkout: false, 
           playWorkout: false,
-          remaining_sets: item.total_sets, // Reset to original number of sets
-          reps: formatSetsReps({...item, remaining_sets: item.total_sets})
+          remaining_sets: item.total_sets,
+          current_time: item.time_held,
+          reps: formatSetsReps({...item, remaining_sets: item.total_sets, current_time: item.time_held})
         } : item
       );
+      
+      // Stop timer if this was the active timer
+      if (activeTimerIndex === index) {
+        setActiveTimerIndex(null);
+      }
+      
+      return resetData;
     });
   };
 
@@ -191,6 +278,14 @@ const updateRoutineCompletion = async (routineName: string): Promise<boolean> =>
     return (
       <View style={styles.loadingContainer}>
         <Text style={styles.loadingText}>Loading exercises...</Text>
+      </View>
+    );
+  }
+
+  if (!routineId) {
+    return (
+      <View style={styles.loadingContainer}>
+        <Text style={styles.loadingText}>Select a workout to see exercises</Text>
       </View>
     );
   }
@@ -204,11 +299,11 @@ const updateRoutineCompletion = async (routineName: string): Promise<boolean> =>
           index={index}
           togglePlayWorkout={togglePlayWorkout}
           markWorkoutAsDone={markWorkoutAsDone}
+          isTimerActive={activeTimerIndex === index && item.playWorkout}
         />
       )}
       renderHiddenItem={({ item, index }) => (
         <View style={styles.rowBack}>
-          {/* Left side (revealed when swiping right) */}
           <TouchableOpacity
             style={styles.previewButton}
             onPress={() => {
@@ -217,7 +312,7 @@ const updateRoutineCompletion = async (routineName: string): Promise<boolean> =>
                 params: {
                   exerciseName: item.exerciseName,
                   description: item.description,
-                  videoUrls: item.videoUrls
+                  videoUrl: typeof item.videoUrls === 'string' ? item.videoUrls : JSON.stringify(item.videoUrls),
                 }
               });
             }}
@@ -225,7 +320,6 @@ const updateRoutineCompletion = async (routineName: string): Promise<boolean> =>
             <Text style={styles.actionText}>Preview</Text>
           </TouchableOpacity>
                     
-          {/* Right side (revealed when swiping left) */}
           <View style={styles.rightButtons}>
             {(item.playWorkout || item.doneWorkout) && (
               <TouchableOpacity
@@ -235,12 +329,12 @@ const updateRoutineCompletion = async (routineName: string): Promise<boolean> =>
                 <Text style={styles.actionText}>Reset</Text>
               </TouchableOpacity>
             )}
-            {item.playWorkout && (
+            {item.playWorkout && item.is_set_type && (
               <TouchableOpacity
                 style={styles.doneButton}
                 onPress={() => markWorkoutAsDone(index)}
               >
-                <Text style={styles.actionText}>Done</Text>
+                <Text style={styles.actionText}>Complete Set</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -258,20 +352,55 @@ const ExerciseRow = ({
   index,
   togglePlayWorkout,
   markWorkoutAsDone,
+  isTimerActive,
 }: {
   item: Exercise;
   index: number;
   togglePlayWorkout: (index: number) => void;
   markWorkoutAsDone: (index: number) => void;
+  isTimerActive: boolean;
 }) => {
-  // Calculate progress percentage based on remaining sets
   const calculateProgress = () => {
     if (item.doneWorkout) return 100;
-    if (item.total_sets === 0) return 0;
     
-    // Calculate percentage of sets completed
-    const setsCompleted = item.total_sets - item.remaining_sets;
-    return (setsCompleted / item.total_sets) * 100;
+    if (item.is_set_type) {
+      if (item.total_sets === 0) return 0;
+      const setsCompleted = item.total_sets - item.remaining_sets;
+      return (setsCompleted / item.total_sets) * 100;
+    }
+    
+    if (item.is_timer_type && item.time_held) {
+      const timeElapsed = (item.time_held - (item.current_time || 0));
+      return (timeElapsed / item.time_held) * 100;
+    }
+    
+    return 0;
+  };
+
+  const getButtonIcon = () => {
+    if (item.doneWorkout) {
+      return <DoneIcon strokeColor="white" width={32} height={32} />;
+    }
+    
+    if (item.is_timer_type && item.playWorkout) {
+      return <TimerIcon strokeColor="white" width={32} height={32} />;
+    }
+    
+    if (item.is_set_type && item.playWorkout) {
+      return <Text style={styles.completeSetText}>✓</Text>;
+    }
+    
+    return <PlayIcon strokeColor="white" width={32} height={32} />;
+  };
+
+  const getButtonAction = () => {
+    if (item.doneWorkout) return null;
+    
+    if (item.is_timer_type) {
+      return () => togglePlayWorkout(index);
+    }
+        
+    return () => togglePlayWorkout(index);
   };
 
   return (
@@ -287,24 +416,24 @@ const ExerciseRow = ({
             rotation={0}
             duration={500}
           >
-            {
-              () => (
-                <LegIcon 
-                  width={32} 
-                  height={32} 
-                  strokeColor={item.doneWorkout ? "#4CAF50" : "#6E49EB"} 
-                />
-              )
-            }
+            {() => (
+              <LegIcon 
+                width={32} 
+                height={32} 
+                strokeColor={item.doneWorkout ? "#4CAF50" : "#6E49EB"} 
+              />
+            )}
           </AnimatedCircularProgress>
         </View>
         <View style={styles.textContainer}>
           <Text numberOfLines={2} style={styles.exerciseName}>{item.exerciseName}</Text>
           <Text style={[
             styles.repsText, 
-            item.doneWorkout ? styles.completedText : {}
+            item.doneWorkout ? styles.completedText : {},
+            isTimerActive ? styles.timerActiveText : {}
           ]}>
             {item.reps}
+            {isTimerActive && ' ⏱️'}
           </Text>
         </View>
       </View>
@@ -312,18 +441,13 @@ const ExerciseRow = ({
       <TouchableOpacity
         style={[
           styles.buttonContainer,
-          item.doneWorkout ? styles.doneButtonContainer : {}
+          item.doneWorkout ? styles.doneButtonContainer : {},
+          item.playWorkout ? styles.activeButtonContainer : {}
         ]}
-        onPress={() => togglePlayWorkout(index)}
-        disabled={item.doneWorkout} // Disable when done
+        onPress={getButtonAction() || undefined}
+        disabled={item.doneWorkout || (item.is_timer_type && item.playWorkout)}
       >
-        {item.doneWorkout ? (
-          <DoneIcon strokeColor="white" width={32} height={32} />
-        ) : item.playWorkout ? (
-          <TimerIcon strokeColor="white" width={32} height={32} />
-        ) : (
-          <PlayIcon strokeColor="white" width={32} height={32} />
-        )}
+        {getButtonIcon()}
       </TouchableOpacity>
     </View>
   );
@@ -365,14 +489,30 @@ const styles = StyleSheet.create({
     color: '#4CAF50',
     fontWeight: '500',
   },
+  timerActiveText: {
+    color: '#FF6B35',
+    fontWeight: 'bold',
+  },
   buttonContainer: {
     backgroundColor: '#6E49EB',
     borderRadius: 9,
     paddingVertical: 6,
     paddingHorizontal: 6,
+    minWidth: 44,
+    minHeight: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  activeButtonContainer: {
+    backgroundColor: '#FF6B35',
   },
   doneButtonContainer: {
     backgroundColor: '#4CAF50',
+  },
+  completeSetText: {
+    color: 'white',
+    fontSize: 20,
+    fontWeight: 'bold',
   },
   rowBack: {
     alignItems: 'center',

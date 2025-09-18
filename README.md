@@ -115,3 +115,15 @@ const baseURL = "http://<your:ip>:8000"; // physical device
 
 ```
 
+## MQTT Broker
+
+
+1. Make sure you have created folders log and data in extras/mosquitto
+2. Run
+```bash
+sudo docker compose up -d
+```
+3. Connect with MQTT Explorer for previewing
+<img width="855" height="437" alt="image" src="https://github.com/user-attachments/assets/d7e2ea8f-26e9-4ba7-bd2f-77d06d0f51c2" />
+
+

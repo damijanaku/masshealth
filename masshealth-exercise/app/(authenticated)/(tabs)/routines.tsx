@@ -5,7 +5,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { useFocusEffect } from '@react-navigation/native'
 import { Asset } from "expo-asset"
 import * as FileSystem from "expo-file-system"
-import * as Location from "expo-location"
+import * as Location from 'expo-location'
 import { LeafletView } from 'react-native-leaflet-view'
 
 import RoutinesIcon from '@/assets/tsxicons/routinesnavbaricon'
@@ -13,8 +13,8 @@ import SectionTitle from '@/components/SectionTitle'
 import CreateRoutineButton from '@/components/createRoutineButton'
 import Routinebutton from '@/components/RoutineButton'
 import RoutinePlaceholder from '@/components/RoutinePlaceholder'
+import { useMqttContext } from '@/components/MqttProvider'
 
-// API
 import privateApi from '@/api'
 
 interface Routine {
@@ -26,11 +26,17 @@ interface Routine {
   updated_at: string
 }
 
-interface RoutineButtonProps {
-  routineName: string
-  routineId: number
-  playIcon?: boolean
-  onPress: (routineName: string, routineId: number) => void
+interface Friend {
+  id: string
+  username: string
+}
+
+interface UserLocation {
+  coords: {
+    latitude: number
+    longitude: number
+    accuracy?: number
+  }
 }
 
 const DEFAULT_LOCATION = {
@@ -40,34 +46,40 @@ const DEFAULT_LOCATION = {
 
 const Routines: React.FC = () => {
   const router = useRouter()
-
+  const mqtt = useMqttContext()
+  
   const [userRoutines, setUserRoutines] = useState<Routine[]>([])
+  const [friends, setFriends] = useState<Friend[]>([])
   const [loadingRoutines, setLoadingRoutines] = useState(true)
+  const [isLoading, setIsLoading] = useState(false)
   const [webViewContent, setWebViewContent] = useState<string | null>(null)
-  const [location, setLocation] = useState<Location.LocationObject | null>(null)
-  const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  const [userLocation, setUserLocation] = useState<UserLocation | null>(null)
+  const [locationWatchId, setLocationWatchId] = useState<Location.LocationSubscription | null>(null)
+  const [friendsLoading, setFriendsLoading] = useState(true)
 
-  const getLocation = async () => {
+
+  // Fetch friends list
+  const fetchFriends = async () => {
     try {
-      let { status } = await Location.requestForegroundPermissionsAsync()
-      if (status !== 'granted') {
-        setErrorMsg('Permission to access location was denied')
-        return
+      setFriendsLoading(true)
+      const response = await privateApi.get('/api/auth/friends-list');
+      
+      if (response.data.success) {
+        const friendsList = response.data.friends
+        setFriends(friendsList)
+        
+        if (mqtt?.connected) {
+          await mqtt.subscribeToFriendsLocations(friendsList)
+        }
       }
-      let currentLocation = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.High,
-      })
-      setLocation(currentLocation)
     } catch (error) {
-      Alert.alert("Error fetching location", String(error))
+      console.error("Error fetching friends", error);
+    } finally {
+      setFriendsLoading(false)
     }
-  }
+  };
+  
 
-  useEffect(() => {
-    getLocation()
-  }, [])
-
-  // Load leaflet HTML
   useEffect(() => {
     let isMounted = true
 
@@ -89,6 +101,81 @@ const Routines: React.FC = () => {
     return () => { isMounted = false }
   }, [])
 
+  // Setup location tracking
+  useEffect(() => {
+    const setupLocationSharing = async () => {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync()
+        if (status !== 'granted') {
+          console.log('Location permission not granted')
+          return
+        }
+
+        const location = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        })
+        
+        const newUserLocation = {
+          coords: {
+            latitude: location.coords.latitude,
+            longitude: location.coords.longitude,
+            accuracy: location.coords.accuracy ?? undefined, 
+          }
+        }
+        
+        setUserLocation(newUserLocation)
+
+        if (mqtt?.connected) {
+          await mqtt.publishLocation(
+            location.coords.latitude,
+            location.coords.longitude,
+            location.coords.accuracy
+          )
+        }
+
+        const watchId = await Location.watchPositionAsync(
+          {
+            accuracy: Location.Accuracy.Balanced,
+            timeInterval: 30000, 
+            distanceInterval: 50
+          },
+          async (newLocation) => {
+            const updatedLocation = {
+              coords: {
+                latitude: newLocation.coords.latitude,
+                longitude: newLocation.coords.longitude,
+                accuracy: newLocation.coords.accuracy ?? undefined,
+              }
+            }
+            
+            setUserLocation(updatedLocation)
+
+            if (mqtt?.connected) {
+              await mqtt.publishLocation(
+                newLocation.coords.latitude,
+                newLocation.coords.longitude,
+                newLocation.coords.accuracy
+              )
+            }
+          }
+        )
+
+        setLocationWatchId(watchId)
+      } catch (error) {
+        console.error('Error setting up location sharing:', error)
+      }
+    }
+
+    setupLocationSharing()
+
+    return () => {
+      if (locationWatchId) {
+        locationWatchId.remove()
+      }
+    }
+  }, [mqtt?.connected])
+  
+
   const fetchRoutines = async () => {
     setLoadingRoutines(true)
     try {
@@ -104,11 +191,64 @@ const Routines: React.FC = () => {
   useFocusEffect(
     React.useCallback(() => {
       fetchRoutines()
+      fetchFriends()
     }, [])
   )
 
   const navigateToPreview = (routineName: string, routineId: number) => {
     router.push(`../routinepreview?routineName=${encodeURIComponent(routineName)}&routineId=${routineId}`)
+  }
+
+  const createMapMarkers = () => {
+    const markers = []
+    console.log(mqtt?.locations)
+
+
+    if (userLocation) {
+      markers.push({
+        position: {
+          lat: userLocation.coords.latitude,
+          lng: userLocation.coords.longitude,
+        },
+        icon: "🟢", 
+        size: [32, 32] as [number, number],
+        title: "Your Location",
+      })
+    }
+
+    console.log(mqtt?.locations)
+
+    if (mqtt?.locations) {
+      mqtt.locations.forEach((friendLocation: { senderId: string; latitude: any; longitude: any }) => {
+        const friend = friends.find(f => f.id === friendLocation.senderId)
+        if (friend) {
+          markers.push({
+            position: {
+              lat: friendLocation.latitude,
+              lng: friendLocation.longitude,
+            },
+            icon: "🔵", // friends
+            size: [28, 28] as [number, number],
+            title: `${friend.username}'s Location`,
+          })
+        }
+      })
+    }
+
+    return markers
+  }
+
+  const getMapCenter = () => {
+    if (userLocation) {
+      return {
+        lat: userLocation.coords.latitude,
+        lng: userLocation.coords.longitude,
+      }
+    }
+    return {
+      lat: DEFAULT_LOCATION.latitude,
+      lng: DEFAULT_LOCATION.longitude,
+    }
   }
 
   return (
@@ -120,29 +260,20 @@ const Routines: React.FC = () => {
           <Text style={styles.sectionTitleText}>Routines</Text>
         </View>
 
-        {webViewContent ? (
+        {webViewContent && !friendsLoading ? (
           <View style={styles.mapWrapper}>
             <View style={styles.map}>
               <LeafletView
                 source={{ html: webViewContent }}
-                mapCenterPosition={{
-                  lat: location?.coords.latitude || DEFAULT_LOCATION.latitude,
-                  lng: location?.coords.longitude || DEFAULT_LOCATION.longitude,
-                }}
-                mapMarkers={[
-                  {
-                    position: {
-                      lat: location?.coords.latitude || DEFAULT_LOCATION.latitude,
-                      lng: location?.coords.longitude || DEFAULT_LOCATION.longitude,
-                    },
-                    icon: "📍", 
-                    size: [32, 32],
-                    title: "Your Location",
-                  }
-                ]}
-                zoom={10}
+                mapCenterPosition={getMapCenter()}
+                mapMarkers={createMapMarkers()}
+                zoom={12}
               />
             </View>
+            <Text style={styles.locationStatus}>
+              📍 Sharing location with {friends.length} friends
+              {mqtt?.locations && ` • Seeing ${mqtt.locations.length} friends`}
+            </Text>
           </View>
         ) : (
           <ActivityIndicator size="large" />
@@ -185,12 +316,18 @@ const styles = StyleSheet.create({
     marginHorizontal: 20,
     alignItems: 'center',
     fontWeight: '700',
+    justifyContent: 'space-between',
   },
   sectionTitleText: {
     fontWeight: '700',
     fontSize: 32,
     color: "#6E49EB",
     margin: 10,
+    flex: 1,
+  },
+  statusText: {
+    fontSize: 12,
+    fontWeight: '600',
   },
   title: {
     flexDirection: 'row',
@@ -221,6 +358,12 @@ const styles = StyleSheet.create({
     width: '90%',
     borderRadius: 12,
     overflow: 'hidden',
+  },
+  locationStatus: {
+    marginTop: 8,
+    fontSize: 12,
+    color: '#666',
+    textAlign: 'center',
   },
 })
 

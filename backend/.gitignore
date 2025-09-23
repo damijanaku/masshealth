@@ -20,4 +20,3 @@ staticfiles/
 
 # Keep management commands but ignore cache
 */management/__pycache__/
-# Or if you want to ignore management entirely, remove the */management/ line

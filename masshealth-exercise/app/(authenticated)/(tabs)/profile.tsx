@@ -13,12 +13,14 @@ import * as SecureStore from 'expo-secure-store'
 import { ACCESS_TOKEN, REFRESH_TOKEN } from '@/constants';
 import * as ImagePicker from 'expo-image-picker';
 import axios from 'axios';
+import { mqttService } from '@/services/MqttContext';
 
 const width = Dimensions.get('window').width;
 const height = Dimensions.get('window').height;
 
 const signOut = async () => {
   try {
+    await mqttService.disconnect()
     await SecureStore.deleteItemAsync(ACCESS_TOKEN)
     await SecureStore.deleteItemAsync(REFRESH_TOKEN)
     router.replace('/login')
@@ -60,7 +62,6 @@ const Profile = () => {
   const [enabling2FA, setEnabling2FA] = useState(false);
   const [image, setImage] = useState<string | null>(null);
 
-  // fetch profile data
   useEffect(() => {
     const fetchProfile = async () => {
       try {
@@ -206,7 +207,7 @@ const Profile = () => {
       quality: 0.8,
     });
 
-    console.log('Image picker result:', result);
+    console.log('Image picker result is:', result);
 
     if (!result.canceled) {
       const selectedImage = result.assets[0].uri;
@@ -260,7 +261,6 @@ const Profile = () => {
       
     } catch (error) {
       console.error('Upload error:', error);
-      // Reset to previous image on error
       setImage(profile.profile_image_url);
       throw error;
     }

@@ -1,0 +1,3 @@
+# Ignore Mosquitto runtime state
+mosquitto/data/
+mosquitto/log/

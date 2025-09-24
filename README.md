@@ -40,9 +40,10 @@ A Django-based health and fitness tracking application.
    python manage.py populate_workouts
    ```
 
-6. **Run the development server**
+6. **Run the development server (use second option if u build on physical device)**
    ```bash
    python manage.py runserver
+   python manage.py runserver 0.0.0.0:8000 
    ```
 
 ## Management Commands
@@ -88,4 +89,41 @@ python manage.py migrate
 python manage.py populate_muscle_groups
 python manage.py populate_workouts
 ```
+
+
+## Frontend Setup (React Native/Expo)
+```bash
+cd frontend
+npm install
+```
+
+```bash
+npx expo run:android --device
+```
+
+
+# For physical device with network issues (creates tunnel)
+```bash
+npx expo start --tunnel
+# then click a for open android on your keyboard
+```
+
+# based on your device and network change base url in api.ts
+```bash
+const baseURL = "http://10.0.2.2:8000"; // emulator
+const baseURL = "http://<your:ip>:8000"; // physical device
+
+```
+
+## MQTT Broker
+
+
+1. Make sure you have created folders log and data in extras/mosquitto
+2. Run
+```bash
+sudo docker compose up -d
+```
+3. Connect with MQTT Explorer for previewing
+<img width="855" height="437" alt="image" src="https://github.com/user-attachments/assets/d7e2ea8f-26e9-4ba7-bd2f-77d06d0f51c2" />
+
 

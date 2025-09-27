@@ -5,17 +5,16 @@ import Constants from 'expo-constants';
 
 const baseURL = "http://192.168.1.18:8000"
 
-// Public API - for registration, login (no auth required)
+// (no auth required)
 export const publicApi = axios.create({
     baseURL: baseURL
 });
 
-// Private API - for authenticated requests
+// for authenticated requests
 const privateApi = axios.create({
     baseURL: baseURL
 });
 
-// Only add auth headers to private API
 privateApi.interceptors.request.use(
     async (config) => {
         const token = await SecureStore.getItemAsync(ACCESS_TOKEN);
@@ -29,5 +28,6 @@ privateApi.interceptors.request.use(
     }
 );
 
-// Default export is the private API for backward compatibility
+
+
 export default privateApi;

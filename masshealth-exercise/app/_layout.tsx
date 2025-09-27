@@ -6,6 +6,7 @@ import * as SecureStore from 'expo-secure-store';
 import { router } from 'expo-router';
 import { ACCESS_TOKEN, REFRESH_TOKEN } from '@/constants';
 import { publicApi } from '../api';
+import { UserProvider } from '@/services/UserContext';
 
 export default function RootLayout() {
   const [isLoading, setIsLoading] = useState(true);
@@ -89,11 +90,14 @@ export default function RootLayout() {
   }
 
   return (
-    <Stack>
-      <Stack.Screen name="entry" options={{ headerShown: false }} />
-      <Stack.Screen name="login" options={{ headerShown: false }} />
-      <Stack.Screen name="register" options={{ headerShown: false }} />
-      <Stack.Screen name="(authenticated)" options={{ headerShown: false }} />
-    </Stack>
+    <UserProvider>
+      <Stack>
+        <Stack.Screen name="entry" options={{ headerShown: false }} />
+        <Stack.Screen name="login" options={{ headerShown: false }} />
+        <Stack.Screen name="register" options={{ headerShown: false }} />
+        <Stack.Screen name="(authenticated)" options={{ headerShown: false }} />
+      </Stack>
+    </UserProvider>
+    
   );
 }

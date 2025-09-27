@@ -15,7 +15,7 @@ interface ExerciseInRoutineProps {
   time?: string;
   press?: boolean;
   emoji?: Svg;
-  destination: "/exercisedescription"
+  destination?: "/exercisedescription"
   onPress?: () => void;
   isSelected?: boolean; 
   loading?: boolean;
@@ -60,7 +60,7 @@ const ExerciseinRoutine: React.FC<ExerciseInRoutineProps> = ({
     console.log('Navigating with video data:', video);
     
     router.push({
-      pathname: destination,
+      pathname: destination || "/exercisedescription",
       params: { 
         exerciseName: exerciseName,
         videoUrl: typeof video === 'string' ? video : JSON.stringify(video),

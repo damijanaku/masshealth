@@ -1,6 +1,6 @@
 import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native'; 
 import { router } from 'expo-router'; 
-import React, { useState, useEffect } from 'react'; 
+import React, { useState, useEffect, useContext } from 'react'; 
 import { SafeAreaView } from 'react-native-safe-area-context';
 import GoogleButton from '../components/GoogleButton';
 import Input from '../components/Input';
@@ -8,34 +8,27 @@ import DefButton from '../components/DefButton';
 import api from '../api'
 import * as SecureStore from 'expo-secure-store'
 import { ACCESS_TOKEN, REFRESH_TOKEN } from '@/constants';
+import { useUser } from '@/hooks/useUser';
 
 
 const login = () => {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [loading, setLoading] = useState(true) // Start with loading true to check session
   const [showReset, setShowReset] = useState(false)
+  const { login, loading } = useUser();
 
   useEffect(() => {
   }, [])
 
-  // Password-based sign in with error handling
-  async function signInWithEmail() {
-    setLoading(true);
+  async function handleLogin() {
 
-    try{
-        const res = await api.post('api/auth/login/', {email, password})
-
-        await SecureStore.setItem(ACCESS_TOKEN, res.data.access)
-        await SecureStore.setItem(REFRESH_TOKEN, res.data.refresh)
-        
-        router.replace("/(authenticated)/(tabs)/home")
-
-    } catch (error) {
-        Alert.alert("Login Failed", JSON.stringify((error as any).response?.data));
-    } finally {
-        setLoading(false)
+    if (!email || !password) {
+      alert('Please enter both email and password');
+      return;
     }
+
+    await login(email, password);
+
   }
 
   return (
@@ -72,7 +65,7 @@ const login = () => {
         />
         
         <DefButton
-          onPress={() => signInWithEmail()}
+          onPress={() => handleLogin()}
           text="Log in!"
         />
         

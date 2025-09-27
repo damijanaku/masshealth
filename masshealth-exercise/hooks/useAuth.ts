@@ -1,4 +1,3 @@
-// hooks/useProfile.ts
 import { useEffect, useState } from "react";
 import privateApi from "@/api";
 

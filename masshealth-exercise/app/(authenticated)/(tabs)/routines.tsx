@@ -272,7 +272,6 @@ const Routines: React.FC = () => {
             </View>
             <Text style={styles.locationStatus}>
               📍 Sharing location with {friends.length} friends
-              {mqtt?.locations && ` • Seeing ${mqtt.locations.length} friends`}
             </Text>
           </View>
         ) : (

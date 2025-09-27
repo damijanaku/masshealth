@@ -9,12 +9,13 @@ import CustomAlert from '../../../components/CustomAlert';
 //import useHealthData from '../../../hooks/useHealthData'
 //EXPO GO USERS!! zakomentiraj hooks in rocno nastavi steps, flights, distance
 import privateApi, { publicApi } from '../../../api';
+import { useUser } from '@/hooks/useUser';
 
 const width = Dimensions.get('window').width;
 const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 const home = () => {
-  const [profile, setProfile] = useState({ name: '', username: '' });
+  const { user, logout } = useUser();
   const [customAlertVisible, setCustomAlertVisible] = useState(false);
   const [customAlertMessage, setCustomAlertMessage] = useState('');
   // Initialize with today's date
@@ -25,36 +26,7 @@ const home = () => {
   //const androidHealthData = useHealthData(selectedDate);
   //const iosHealthData = useHealthDataios(selectedDate)
   
-  useEffect(() => {
-    const fetchProfile = async () => {
-      try {
-        console.log('Fetching data');
-
-      const response = await privateApi.get('/api/auth/profile/')
-      const userData = response.data
-
-      setProfile({
-        name: userData.full_name || userData.username || userData.email || 'User',
-        username: userData.username || '',
-      });
-
-      if (userData.profile_image_url) {
-        setImage(userData.profile_image_url)
-      } else {
-        console.log("No profile image found");
-      }
-
-      console.log('Profile loaded:', userData);
-    } catch (error) {
-      console.error('Profile fetch error:', error);
-        
-        // Set fallback name
-        setProfile(prev => ({ ...prev, name: 'User' }));
-    }
-      }
-      
-    fetchProfile();
-  }, []);
+  
 
   const today = new Date();
   const todayIndex = today.getDay() === 0 ? 6 : today.getDay() - 1; // Monday = 0, Sunday = 6
@@ -107,7 +79,7 @@ const home = () => {
         </View>
         <View style={styles.upperRow}>
           <View style={styles.user}>
-            <Text style={styles.userText}>Hello, {profile.name}</Text>
+            <Text style={styles.userText}>Hello, {user?.full_name}</Text>
             <Text style={styles.userDate}>{today.toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'long' })}</Text>
           </View>
           <TouchableOpacity style={styles.circle} >

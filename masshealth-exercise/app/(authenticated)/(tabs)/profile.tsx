@@ -14,21 +14,10 @@ import { ACCESS_TOKEN, REFRESH_TOKEN } from '@/constants';
 import * as ImagePicker from 'expo-image-picker';
 import axios from 'axios';
 import { mqttService } from '@/services/MqttContext';
+import { useUser } from '@/hooks/useUser';
 
 const width = Dimensions.get('window').width;
 const height = Dimensions.get('window').height;
-
-const signOut = async () => {
-  try {
-    await mqttService.disconnect()
-    await SecureStore.deleteItemAsync(ACCESS_TOKEN)
-    await SecureStore.deleteItemAsync(REFRESH_TOKEN)
-    router.replace('/login')
-  } catch (error) {
-    console.log("Error logging out", error)
-    router.replace('/login')
-  }
-};
 
 interface PendingRequest {
   id: any;
@@ -49,7 +38,8 @@ interface Friend {
 }
 
 const Profile = () => {
-  const [profile, setProfile] = useState({ name: '', username: '', profile_image_url: null });
+  const { user, logout } = useUser();
+
   const [friendUsername, setFriendUsername] = useState(''); 
   const [customAlertVisible, setCustomAlertVisible] = useState(false);
   const [customAlertMessage, setCustomAlertMessage] = useState('');
@@ -63,35 +53,21 @@ const Profile = () => {
   const [image, setImage] = useState<string | null>(null);
 
   useEffect(() => {
-    const fetchProfile = async () => {
-      try {
-        console.log('Fetching profile data...');
-        const response = await privateApi.get('/api/auth/profile/');
-        const userData = response.data;
-
-        setProfile({
-          name: userData.full_name || userData.username || userData.email || 'User',
-          username: userData.username || '',
-          profile_image_url: userData.profile_image_url
-        });
-
-        // Set the image 
-        if (userData.profile_image_url) {
-          setImage(userData.profile_image_url);
-          console.log("Profile image loaded:", userData.profile_image_url);
-        } else {
-          console.log("No profile image found");
-        }
-
-        console.log('Profile loaded:', userData);
-      } catch (error) {
-        console.error('Profile fetch error:', error);
-        setProfile(prev => ({ ...prev, name: 'User' }));
-      }
-    };
-    
-    fetchProfile();
-  }, [activeTab]); 
+    if (user?.profile_image_url) {
+      setImage(user.profile_image_url);
+    }
+  }, [user]);
+  
+  const handleLogout = async () => {
+    try {
+      await mqttService.disconnect();
+      await logout(); 
+      router.replace('/login')
+    } catch (error) {
+      console.log("Error during logout:", error);
+      await logout();
+    }
+  };
 
   const handle2FAToggle = async () => {
   };
@@ -250,10 +226,6 @@ const Profile = () => {
       const profileResponse = await privateApi.get('/api/auth/profile/');
       if (profileResponse.data.profile_image_url) {
         setImage(profileResponse.data.profile_image_url);
-        setProfile(prev => ({
-          ...prev,
-          profile_image_url: profileResponse.data.profile_image_url
-        }));
         console.log('Profile image updated:', profileResponse.data.profile_image_url);
       }
 
@@ -261,7 +233,9 @@ const Profile = () => {
       
     } catch (error) {
       console.error('Upload error:', error);
-      setImage(profile.profile_image_url);
+      if (user?.profile_image_url) {
+        setImage(user.profile_image_url);
+      }
       throw error;
     }
   };
@@ -284,8 +258,8 @@ const Profile = () => {
           )}
         </TouchableOpacity>
         
-        <Text style={styles.nameofuser}>{profile.name}</Text>
-        <Text style={styles.username}>@{profile.username}</Text>
+        <Text style={styles.nameofuser}>{user?.full_name || 'User'}</Text>
+        <Text style={styles.username}>@{user?.username || ''}</Text>
         
         <TouchableOpacity onPress={pickImage} style={styles.changeImageButton}>
           <Text style={styles.changeImageText}>
@@ -313,7 +287,7 @@ const Profile = () => {
             {enabling2FA ? 'Processing...' : (twofactorauth ? "Disable 2FA" : "Enable 2FA")}
           </Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.option} onPress={signOut}>
+        <TouchableOpacity style={styles.option} onPress={handleLogout}>
           <LogoutIcon stroke="#6E49EB" strokeWidth={18} width={24} height={24} fillColor="none" />
           <View style={styles.optiontitle}>
             <Text style={styles.optiontext}>Logout</Text>

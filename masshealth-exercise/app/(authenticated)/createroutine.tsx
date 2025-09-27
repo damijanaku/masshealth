@@ -263,7 +263,6 @@ const CreateRoutine = () => {
             press={true}
             isSelected={isExerciseSelected(item.id)}
             onPress={() => toggleExerciseSelection(item)}
-            destination="/excercisepreview"
             loading={loadingExerciseId === item.id} 
           />
         )}

@@ -341,7 +341,7 @@ const Profile = () => {
             ) : (
               <FlatList
                 data={pendingRequests}
-                keyExtractor={(item) => item.id}
+                keyExtractor={(item) => item.id?.toString()}
                 renderItem={({ item }) => (
                   <View style={styles.requestItem}>
                     <View style={styles.requestUserInfo}>

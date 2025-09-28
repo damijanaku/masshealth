@@ -12,6 +12,8 @@ urlpatterns = [
     path('profile/upload-image/', views.upload_profile_image, name='upload_profile_image'),
     path('profile/remove-image/', views.remove_profile_image, name='remove_profile_image'),
     path('profile/metadata/', views.get_user_metadata, name='get_user_metadata'),
+    path('profile/get-2fa/', views.get_two_factor_auth, name='get_two_factor_auth'),
+    path('profile/update-2fa/', views.update_two_factor_auth, name='update_2fa'),
     
     # Friends URLs
     path('send-friend-request/<int:userId>/', views.send_friend_request, name="send_friend_request"),
@@ -21,7 +23,7 @@ urlpatterns = [
     path('search-users/', views.search_users, name="search_users"),
     
     # Workout URLs
-    path('workouts/', views.WorkoutListView.as_view(), name="workout-list"),  # Fixed: added ()
+    path('workouts/', views.WorkoutListView.as_view(), name="workout-list"), 
     path('workouts/muscle-group/<str:muscle_group_name>/', 
          views.get_workout_by_muscle_group, name='workout-by-muscle-group'),
     

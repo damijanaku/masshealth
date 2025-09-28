@@ -44,6 +44,7 @@ class CustomUser(AbstractUser):
     email = models.EmailField(unique=True)
     full_name = models.CharField(max_length=100)
     is_verified = models.BooleanField(default=False)
+    two_factor_auth = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     friends = models.ManyToManyField("self", blank=True, symmetrical=False)

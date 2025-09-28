@@ -92,6 +92,17 @@ class UserMetadataSerializer(serializers.ModelSerializer):
             return obj.profile_image.url
         return None
 
+class TwoFactorAuthSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CustomUser
+        fields = ['two_factor_auth']
+
+    def update(self, instance, validated_data):
+        instance.two_factor_auth = validated_data.get('two_factor_auth', instance.two_factor_auth)
+
+        instance.save()
+        return instance
+
 class MuscleGroupSerializer(serializers.ModelSerializer):
     class Meta:
         model = MuscleGroup

@@ -7,7 +7,7 @@ from django.contrib.auth import login
 from django.shortcuts import get_object_or_404
 from django.db import models 
 from .serializers import (RoutineWorkoutSerializer, UserRegistrationSerializer, UserLoginSerializer, 
-                         UserProfileSerializer, UserMetadataSerializer,
+                         UserProfileSerializer, UserMetadataSerializer, TwoFactorAuthSerializer,
                          MuscleGroupSerializer, WorkoutSerializer, 
                          RoutineSerializer, RoutineWorkoutCreateUpdateSerializer, RoutineDetailSerializer)
 from ..models import CustomUser, UserMetadata, FriendRequest, Workout, Routine, RoutineWorkout, MuscleGroup
@@ -163,6 +163,36 @@ def get_user_metadata(request):
             'success': False,
             'error': f'An error occurred: {str(e)}'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def update_two_factor_auth(request):
+
+    user = request.user
+    
+    serializer = TwoFactorAuthSerializer(user, data=request.data, partial=True)
+
+    if serializer.is_valid():
+        serializer.save()
+
+        return Response({
+            "message": "2FA settings updated successfully",
+            "two_factor_auth": user.two_factor_auth
+        }, status=status.HTTP_200_OK)
+
+    return Response(serializer.errors,
+        status=status.HTTP_400_BAD_REQUEST
+        )
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def get_two_factor_auth(request):
+
+    user = request.user
+
+    return Response({
+        'two_factor_auth': user.two_factor_auth
+    }, status=status.HTTP_200_OK)
 
 # Friend request views
 @api_view(['POST'])

@@ -4,3 +4,7 @@ djangorestframework-simplejwt>=5.2.0
 Pillow>=9.0.0
 django-cors-headers>=4.0.0
 python-decouple>=3.6
+numpy
+opencv-python-headless
+insightface
+onnxruntime

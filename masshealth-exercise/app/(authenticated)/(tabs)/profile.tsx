@@ -107,6 +107,7 @@ const Profile = () => {
         
         if (result.success) {
           setTwofactorAuth(true)
+          router.replace('../faceauth?authMode=set2fa')
         } else {
           setCustomAlertTitle('Error');
           setCustomAlertMessage('Failed to enable two-factor authentication');
@@ -301,7 +302,7 @@ const Profile = () => {
 
       console.log('Uploading image...');
       const response = await axios.post(
-        'http://10.0.2.2:8000/api/auth/profile/upload-image/',
+        'http://192.168.1.18:8000/api/auth/profile/upload-image/',
         formData,
         {
           headers: {

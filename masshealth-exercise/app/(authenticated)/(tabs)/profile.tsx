@@ -57,6 +57,15 @@ const Profile = () => {
       setImage(user.profile_image_url);
     }
   }, [user]);
+
+  useEffect(() => {
+    const load2FAStatus = async () => {
+      const status = await check2FAStatus();
+      setTwofactorAuth(status);
+    };
+    
+    load2FAStatus();
+  }, []);
   
   const handleLogout = async () => {
     try {
@@ -70,14 +79,98 @@ const Profile = () => {
   };
 
   const handle2FAToggle = async () => {
+    if(twofactorauth){
+      setEnabling2FA(true);
+
+      try {
+        const result = await disable2FA()
+  
+        if (result.success) {
+          setTwofactorAuth(false);
+        } else {
+          setCustomAlertTitle('Error');
+          setCustomAlertMessage('Failed to disable two-factor authentication');
+          setCustomAlertVisible(true);
+        }
+      } catch (error) {
+          console.error("Error disabling 2FA:", error);
+          setCustomAlertTitle('Error');
+          setCustomAlertMessage('An error occurred while disabling 2FA');
+          setCustomAlertVisible(true);
+      } finally {
+        setEnabling2FA(false);
+      }
+    } else {
+      setEnabling2FA(true);
+      try {
+        const result = await enable2FA();
+        
+        if (result.success) {
+          setTwofactorAuth(true)
+          router.replace('../faceauth?authMode=set2fa')
+        } else {
+          setCustomAlertTitle('Error');
+          setCustomAlertMessage('Failed to enable two-factor authentication');
+          setCustomAlertVisible(true);
+        }
+      } catch (error) {
+        console.error("Error enabling 2FA:", error);
+        setCustomAlertTitle('Error');
+        setCustomAlertMessage('An error occurred while enabling 2FA');
+        setCustomAlertVisible(true);
+      } finally {
+        setEnabling2FA(false);
+      }
+    }
+
+    
   };
 
-  useEffect(() => {
-    const load2FAStatus = async () => {
-    };
+  const check2FAStatus = async () => {
+    try {
+      const response = await privateApi.get('/api/auth/profile/get-2fa/');
+      return response.data.two_factor_auth;
+
+    } catch (error) {
+      console.error("Error catching two factor auth data", error);
+    }
+
     
-    load2FAStatus();
-  }, []);
+  }
+
+  const enable2FA = async (): Promise<{success: boolean; message?: string}> => {
+    try {
+      const response = await privateApi.post('/api/auth/profile/update-2fa/', {two_factor_auth: true});
+      return {
+        success: true,
+        message: response.data.message || '2FA enabled successfully'
+      };
+    } catch (error: any) {
+      console.error("Error enabling two factor auth", error);
+      return {
+        success: false,
+        message: error.response?.data?.error || 'Failed to enable 2FA'
+      };
+    }
+  }
+  
+  const disable2FA = async (): Promise<{success: boolean; message?: string}> => {
+    try {
+      const response = await privateApi.post('/api/auth/profile/update-2fa/', {two_factor_auth: false});
+      return {
+        success: true,
+        message: response.data.message || '2FA disabled successfully'
+      };
+    } catch (error: any) {
+      console.error("Error disabling two factor auth", error);
+      return {
+        success: false,
+        message: error.response?.data?.error || 'Failed to disable 2FA'
+      };
+    }
+  }
+
+
 
   const fetchPendingRequests = async () => {
     try {
@@ -209,7 +302,7 @@ const Profile = () => {
 
       console.log('Uploading image...');
       const response = await axios.post(
-        'http://10.0.2.2:8000/api/auth/profile/upload-image/',
+        'http://192.168.1.18:8000/api/auth/profile/upload-image/',
         formData,
         {
           headers: {
@@ -278,7 +371,7 @@ const Profile = () => {
           onPress={async () => {
             await handle2FAToggle();
             if (!twofactorauth) { 
-              router.push('../FaceAuthTakePic');
+              //router.push('../FaceAuthTakePic');
             }
           }}
           disabled={enabling2FA}

@@ -62,8 +62,19 @@ export function UserProvider({ children }: UserProviderProps) {
       await SecureStore.setItemAsync(REFRESH_TOKEN, res.data.refresh);
       
       await fetchProfile(); 
-      
-      router.replace("/(authenticated)/(tabs)/home");
+
+      try {
+        const response = await privateApi.get('/api/auth/profile/get-2fa/');
+
+        if(response.data.two_factor_auth == true){
+          router.replace('/(authenticated)/faceauth?authMode=2fa')
+        } else {
+          router.replace("/(authenticated)/(tabs)/home");
+        }
+      } catch (error) {
+        Alert.alert("Login Failed", JSON.stringify((error as any).response?.data));
+      }
+
     } catch (error) {
       Alert.alert("Login Failed", JSON.stringify((error as any).response?.data));
     } finally {

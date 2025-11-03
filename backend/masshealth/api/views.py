@@ -7,12 +7,15 @@ from django.contrib.auth import login
 from django.shortcuts import get_object_or_404
 from django.db import models 
 from .serializers import (RoutineWorkoutSerializer, UserRegistrationSerializer, UserLoginSerializer, 
-                         UserProfileSerializer, UserMetadataSerializer,
+                         UserProfileSerializer, UserMetadataSerializer, TwoFactorAuthSerializer,
                          MuscleGroupSerializer, WorkoutSerializer, 
                          RoutineSerializer, RoutineWorkoutCreateUpdateSerializer, RoutineDetailSerializer)
 from ..models import CustomUser, UserMetadata, FriendRequest, Workout, Routine, RoutineWorkout, MuscleGroup
 from .forms import ProfilePicForm
 import os
+import numpy as np
+import cv2
+from insightface.app import FaceAnalysis
 
 class RegisterView(generics.CreateAPIView):
     queryset = CustomUser.objects.all()
@@ -163,8 +166,142 @@ def get_user_metadata(request):
             'success': False,
             'error': f'An error occurred: {str(e)}'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def update_two_factor_auth(request):
 
-# Friend request views
+    user = request.user
+    
+    serializer = TwoFactorAuthSerializer(user, data=request.data, partial=True)
+
+    if serializer.is_valid():
+        new_2fa_value = serializer.validated_data.get('two_factor_auth')
+        
+        if new_2fa_value is False and user.two_factor_auth is True:
+            user.embedding = None
+            
+        serializer.save()
+
+        return Response({
+            "message": "2FA settings updated successfully",
+            "two_factor_auth": user.two_factor_auth
+        }, status=status.HTTP_200_OK)
+
+    return Response(serializer.errors,
+        status=status.HTTP_400_BAD_REQUEST
+        )
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def get_two_factor_auth(request):
+
+    user = request.user
+
+    return Response({
+        'two_factor_auth': user.two_factor_auth
+    }, status=status.HTTP_200_OK)
+
+
+app = FaceAnalysis(providers=['CUDAExecutionProvider', 'CPUExecutionProvider'])
+app.prepare(ctx_id=0, det_size=(640, 640))
+
+def get_embedding(image_bytes):
+    nparr = np.frombuffer(image_bytes, np.uint8)
+    img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    faces = app.get(img)
+    if len(faces) == 0:
+        return None
+    return faces[0].normed_embedding
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def enroll(request):
+    try:
+        user = request.user
+
+        if not user.two_factor_auth:
+            return Response({
+                'error': '2FA must be enabled to use face authentication'
+            }, status=400)
+        
+        if 'image' not in request.FILES: 
+            return Response({'error': 'No image provided'}, status=400)
+            
+        image = request.FILES['image'].read()
+        if len(image) == 0:
+            return Response({'error': 'Empty image'}, status=400)
+            
+        emb = get_embedding(image)
+        if emb is None:
+            return Response({'error': 'No face detected'}, status=400)
+            
+        user.embedding = emb.tolist()  
+        user.save()
+        
+        return Response({
+            'success': True,
+            'message': 'Embedding created for user' 
+        }, status=status.HTTP_201_CREATED)
+        
+    except Exception as e:
+        return Response({'error': str(e)}, status=500)
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def authenticate_2fa(request):
+    try:
+        user = request.user
+        
+        if not user.has_face_embedding():
+            return Response({
+                'success': False,
+                'error': 'No face embedding found. Please enroll first.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        if 'image' not in request.FILES:
+            return Response({
+                'success': False,
+                'error': 'No image provided'
+            }, status=status.HTTP_400_BAD_REQUEST)
+            
+        image = request.FILES['image'].read()
+        if len(image) == 0:
+            return Response({
+                'success': False,
+                'error': 'Empty image file'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        emb = get_embedding(image)
+        if emb is None:
+            return Response({
+                'success': False,
+                'error': 'No face detected in the image'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        og_emb = np.array(user.embedding)
+        sim = np.dot(og_emb, emb) / (np.linalg.norm(og_emb) * np.linalg.norm(emb))
+        similarity_score = float(sim)  
+
+        if similarity_score > 0.7:
+            return Response({
+                'success': True,
+                'similarity': similarity_score
+            }, status=status.HTTP_200_OK)
+        else:
+            return Response({
+                'success': False,
+                'error': 'Face not recognized',
+                'similarity': similarity_score
+            }, status=status.HTTP_401_UNAUTHORIZED)
+            
+    except Exception as e:
+        return Response({
+            'success': False,
+            'error': 'Internal server error'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
 @api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])
 def send_friend_request(request, userId):

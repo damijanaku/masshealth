@@ -40,13 +40,15 @@ class CustomUserManager(BaseUserManager):
 
 
 class CustomUser(AbstractUser):
-    username = None  # remove username
+    username = None  
     email = models.EmailField(unique=True)
     full_name = models.CharField(max_length=100)
     is_verified = models.BooleanField(default=False)
+    two_factor_auth = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     friends = models.ManyToManyField("self", blank=True, symmetrical=False)
+    embedding = models.JSONField(null=True, blank=True)
 
 
     USERNAME_FIELD = 'email'
@@ -56,6 +58,10 @@ class CustomUser(AbstractUser):
 
     def __str__(self):
         return self.email
+    
+    def has_face_embedding(self):
+        return self.embedding is not None
+
 
 class UserMetadata(models.Model):
     GENDER_CHOICES = [

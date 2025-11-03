@@ -25,7 +25,6 @@ const Register = () => {
     async function registerUser() {
         setLoading(true);
         try {
-            // Use publicApi for registration (no auth headers)
             const res = await publicApi.post("/api/auth/register/", {
                 email: email,
                 username: username,
@@ -37,7 +36,7 @@ const Register = () => {
             await SecureStore.setItemAsync(ACCESS_TOKEN, res.data.access)
             await SecureStore.setItemAsync(REFRESH_TOKEN, res.data.refresh)
 
-            router.replace('/(authenticated)/app')
+            router.replace('/(authenticated)/(tabs)/home')
         } catch (error: any) {
             console.log('Registration error:', error.response?.data);
             Alert.alert("Registration Failed", 

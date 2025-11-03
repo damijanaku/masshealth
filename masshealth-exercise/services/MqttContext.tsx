@@ -75,7 +75,7 @@ class MqttService {
           keepAliveInterval: 60,
           timeout: 15,
           onSuccess: () => {
-            console.log("✅ MQTT Connected");
+            console.log("MQTT Connected");
             this.isConnecting = false;
             this.notifyConnectionListeners(true);
             this.resubscribeToTopics();
@@ -110,7 +110,7 @@ class MqttService {
   }
 
   private onMessageArrived(message: Message): void {
-    console.log("📩 Raw MQTT:", message.destinationName, message.payloadString);
+    console.log("Raw MQTT:", message.destinationName, message.payloadString);
     try {
       const topic = message.destinationName;
       const payload = JSON.parse(message.payloadString);
@@ -118,7 +118,7 @@ class MqttService {
       if (topic.includes('/location')) {
         const locationMessage: LocationMessage = payload;
         console.log("Location received:", locationMessage);
-        console.log("🔔 Calling", this.locationCallbacks.length, "location listeners");
+        console.log(" Calling", this.locationCallbacks.length, "location listeners");
         this.locationCallbacks.forEach((cb) => cb(locationMessage));
       } else if (topic.includes('/message')) {
         const mqttMessage: MQTTMessage = payload;
@@ -160,7 +160,7 @@ class MqttService {
       const topic = `user/${friend.id}/location`;
       this.client.subscribe(topic, { qos: 1 });
       this.subscribedTopics.add(topic);
-      console.log(`📍 Subscribed to ${friend.username}'s location: ${topic}`);
+      console.log(`Subscribed to ${friend.username}'s location: ${topic}`);
     }
   }
 
@@ -171,7 +171,7 @@ class MqttService {
       const topic = `user/${friend.id}/location`;
       this.client.unsubscribe(topic);
       this.subscribedTopics.delete(topic);
-      console.log(`📍 Unsubscribed from ${friend.username}'s location: ${topic}`);
+      console.log(`Unsubscribed from ${friend.username}'s location: ${topic}`);
     }
   }
 
@@ -181,7 +181,7 @@ class MqttService {
     const topic = `user/${friendId}/location`;
     this.client.subscribe(topic, { qos: 1 });
     this.subscribedTopics.add(topic);
-    console.log(`📍 Subscribed to location: ${topic}`);
+    console.log(`Subscribed to location: ${topic}`);
   }
 
   async unsubscribeFromFriendLocation(friendId: string): Promise<void> {
@@ -190,7 +190,7 @@ class MqttService {
     const topic = `user/${friendId}/location`;
     this.client.unsubscribe(topic);
     this.subscribedTopics.delete(topic);
-    console.log(`📍 Unsubscribed from location: ${topic}`);
+    console.log(`Unsubscribed from location: ${topic}`);
   }
 
   async subscribeToFriend(friendId: string): Promise<void> {
@@ -276,7 +276,7 @@ class MqttService {
   }
   
   async disconnect(): Promise<void> {
-    console.log("🔌 Disconnecting...");
+    console.log(" Disconnecting...");
     this.shouldReconnect = false;
     this.client?.disconnect();
     this.notifyConnectionListeners(false);

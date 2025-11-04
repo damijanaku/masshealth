@@ -1,10 +1,15 @@
 from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.db import models
 from django.core.exceptions import ValidationError
+from django.conf import settings
 import os
 import uuid
 from PIL import Image
-from django.core.exceptions import ValidationError
+import threading
+import logging
+from django.utils import timezone
+
+logger = logging.getLogger(__name__)
 
 def validate_image_size(image):
     max_size = 5 * 1024 * 1024
@@ -21,6 +26,94 @@ def profile_image_path(instance, filename):
     ext = filename.split('.')[-1]
     filename = f"{uuid.uuid4()}.{ext}"
     return f'profile_images/user_{instance.user.id}/{filename}'
+
+class SyncToSupabaseMixin(models.Model):
+    """Mixin to handle Supabase synchronization"""
+    synced_at = models.DateTimeField(null=True, blank=True)
+    sync_status = models.CharField(
+        max_length=20,
+        choices=[
+            ('pending', 'Pending'),
+            ('synced', 'Synced'),
+            ('failed', 'Failed'),
+        ],
+        default='pending'
+    )
+    
+    class Meta:
+        abstract = True
+    
+    def save(self, *args, **kwargs):
+        # Check if we're already using supabase to avoid infinite loop
+        using_db = kwargs.get('using', 'default')
+        
+        # Always save locally first (instant response to mobile app)
+        super().save(*args, **kwargs)
+        
+        # Queue sync to Supabase in background (non-blocking)
+        # Only sync if we're saving to default database and sync is enabled
+        if using_db == 'default' and getattr(settings, 'SYNC_TO_SUPABASE', True):
+            threading.Thread(target=self._sync_to_supabase).start()
+    
+    def _sync_to_supabase(self):
+        """Background sync to Supabase"""
+        try:
+            # Get a fresh copy from the database to avoid threading issues
+            obj_copy = self.__class__.objects.using('default').get(pk=self.pk)
+            
+            # Prepare data for Supabase (handle relationships)
+            obj_dict = {}
+            for field in obj_copy._meta.fields:
+                if field.name not in ['synced_at', 'sync_status']:
+                    value = getattr(obj_copy, field.name)
+                    # Handle foreign keys
+                    if field.many_to_one or field.one_to_one:
+                        value = value.pk if value else None
+                    obj_dict[field.name] = value
+            
+            # Check if record exists in Supabase
+            exists_in_supabase = False
+            try:
+                self.__class__.objects.using('supabase').get(pk=self.pk)
+                exists_in_supabase = True
+            except:
+                pass
+            
+            if exists_in_supabase:
+                # Update existing record
+                self.__class__.objects.using('supabase').filter(pk=self.pk).update(**obj_dict)
+            else:
+                # Create new record
+                obj_dict['id'] = self.pk
+                self.__class__.objects.using('supabase').create(**obj_dict)
+            
+            # Update sync status locally
+            self.__class__.objects.using('default').filter(pk=self.pk).update(
+                synced_at=timezone.now(),
+                sync_status='synced'
+            )
+            logger.info(f"Synced {self.__class__.__name__} {self.pk} to Supabase")
+            
+        except Exception as e:
+            # Mark as failed
+            self.__class__.objects.using('default').filter(pk=self.pk).update(
+                sync_status='failed'
+            )
+            logger.error(f"Failed to sync {self.__class__.__name__} {self.pk}: {e}")
+
+    def delete(self, *args, **kwargs):
+        """Override delete to sync deletion to Supabase"""
+        using_db = kwargs.get('using', 'default')
+        
+        # Delete from Supabase in background if deleting from default
+        if using_db == 'default' and getattr(settings, 'SYNC_TO_SUPABASE', True):
+            pk_to_delete = self.pk
+            threading.Thread(
+                target=lambda: self.__class__.objects.using('supabase').filter(pk=pk_to_delete).delete()
+            ).start()
+        
+        # Delete locally
+        super().delete(*args, **kwargs)
 
 # custom manager
 class CustomUserManager(BaseUserManager):
@@ -39,7 +132,7 @@ class CustomUserManager(BaseUserManager):
         return self.create_user(email, password, **extra_fields)
 
 
-class CustomUser(AbstractUser):
+class CustomUser(AbstractUser, SyncToSupabaseMixin):
     username = None  
     email = models.EmailField(unique=True)
     full_name = models.CharField(max_length=100)
@@ -63,7 +156,7 @@ class CustomUser(AbstractUser):
         return self.embedding is not None
 
 
-class UserMetadata(models.Model):
+class UserMetadata(SyncToSupabaseMixin, models.Model):
     GENDER_CHOICES = [
         ('M', 'Male'),
         ('F', 'Female'),
@@ -129,7 +222,7 @@ class UserMetadata(models.Model):
         verbose_name = "User Metadata"
         verbose_name_plural = "User Metadata"
 
-class FriendRequest(models.Model):
+class FriendRequest(SyncToSupabaseMixin, models.Model):
     from_user = models.ForeignKey(
         CustomUser, related_name="from_user", on_delete=models.CASCADE
     )
@@ -137,7 +230,7 @@ class FriendRequest(models.Model):
         CustomUser, related_name="to_user", on_delete=models.CASCADE
     )
 
-class MuscleGroup(models.Model):
+class MuscleGroup(SyncToSupabaseMixin, models.Model):
     name = models.CharField(max_length=50, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
     
@@ -147,7 +240,7 @@ class MuscleGroup(models.Model):
     class Meta:
         ordering = ['name']
 
-class Routine(models.Model):
+class Routine(SyncToSupabaseMixin, models.Model):
     name = models.CharField(max_length=200)
     description = models.TextField(blank=True, null=True)
     user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='routines', null=True)
@@ -161,7 +254,7 @@ class Routine(models.Model):
     class Meta:
         ordering = ['-created_at']
 
-class Workout(models.Model):
+class Workout(SyncToSupabaseMixin, models.Model):
     EXPERIENCE_LEVELS = [
         ('beginner', 'Beginner'),
         ('intermediate', 'Intermediate'), 
@@ -245,7 +338,7 @@ class Workout(models.Model):
         ordering = ['name']
 
 
-class RoutineWorkout(models.Model):
+class RoutineWorkout(SyncToSupabaseMixin, models.Model):
     WORKOUT_MODES = [
         ('reps_sets', 'Reps & Sets'),
         ('timer', 'Timer'),

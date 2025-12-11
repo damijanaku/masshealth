@@ -69,7 +69,9 @@ const Profile = () => {
   
   const handleLogout = async () => {
     try {
-      await mqttService.disconnect();
+      if (mqttService.isConnected()) {
+        await mqttService.disconnect();
+      }
       await logout(); 
       router.replace('/login')
     } catch (error) {
@@ -302,7 +304,7 @@ const Profile = () => {
 
       console.log('Uploading image...');
       const response = await axios.post(
-        'http://192.168.1.18:8000/api/auth/profile/upload-image/',
+        'http://164.8.222.74:8000/api/auth/profile/upload-image/',
         formData,
         {
           headers: {

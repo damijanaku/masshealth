@@ -69,7 +69,7 @@ export function UserProvider({ children }: UserProviderProps) {
         if(response.data.two_factor_auth == true){
           router.replace('/(authenticated)/faceauth?authMode=2fa')
         } else {
-          router.replace("/(authenticated)/(tabs)/home");
+          router.replace('/(authenticated)/preferencesScreen');
         }
       } catch (error) {
         Alert.alert("Login Failed", JSON.stringify((error as any).response?.data));

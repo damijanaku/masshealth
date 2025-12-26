@@ -1,6 +1,7 @@
 from django.urls import path
 from rest_framework_simplejwt.views import TokenRefreshView
 from . import views
+from masshealth.api.views import get_mqtt_credentials
 
 urlpatterns = [
     # Auth URLs
@@ -16,6 +17,7 @@ urlpatterns = [
     path('profile/update-2fa/', views.update_two_factor_auth, name='update_2fa'),
     path('enroll/', views.enroll, name='enroll_image_for_2fa'),
     path('authenticate_2fa/', views.authenticate_2fa, name='authenticate_user_with_2fa'),
+    path('mqtt/credentials/', get_mqtt_credentials, name='mqtt-credentials'),
 
     
     path('send-friend-request/<int:userId>/', views.send_friend_request, name="send_friend_request"),

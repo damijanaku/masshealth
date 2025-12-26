@@ -3,7 +3,7 @@ import { ACCESS_TOKEN } from "./constants"
 import * as SecureStore from 'expo-secure-store';
 import Constants from 'expo-constants';
 
-const baseURL = "http://164.8.39.6:8000"
+const baseURL = "http://192.168.1.165:8000"
 
 // (no auth required)
 export const publicApi = axios.create({

@@ -22,6 +22,7 @@
     "expo": "~53.0.20",
     "expo-asset": "~11.1.7",
     "expo-blur": "~14.1.5",
+    "expo-camera": "~16.1.11",
     "expo-constants": "~17.1.7",
     "expo-dev-client": "~5.2.4",
     "expo-file-system": "~18.1.11",
@@ -46,6 +47,7 @@
     "react-dom": "19.0.0",
     "react-native": "0.79.5",
     "react-native-circular-progress": "^1.4.1",
+    "react-native-dotenv": "^3.4.11",
     "react-native-gesture-handler": "~2.24.0",
     "react-native-image-crop-picker": "^0.51.0",
     "react-native-leaflet-view": "^1.1.2",
@@ -55,8 +57,7 @@
     "react-native-svg": "^15.12.1",
     "react-native-swipe-list-view": "^3.2.9",
     "react-native-web": "~0.20.0",
-    "react-native-webview": "13.13.5",
-    "expo-camera": "~16.1.11"
+    "react-native-webview": "13.13.5"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",

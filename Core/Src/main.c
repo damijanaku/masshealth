@@ -18,6 +18,8 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include <string.h>
+#include <stdio.h>
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -31,11 +33,19 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
+#define ESP_UART huart1
+#define ENABLE_USER_LOG 1
+#define DISABLE_USER_LOG 0
+#define ESP_RX_BUFFER_SIZE 512
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
 /* USER CODE BEGIN PM */
+#if ENABLE_USER_LOG
+#define DEBUG_LOG(fmt, ...) printf(fmt "\r\n", ##__VA_ARGS__)
+#else
+#define DEBUG_LOG(fmt, ...)
+#endif
 
 /* USER CODE END PM */
 
@@ -50,7 +60,7 @@ UART_HandleTypeDef huart2;
 PCD_HandleTypeDef hpcd_USB_FS;
 
 /* USER CODE BEGIN PV */
-char tx_data[40] = "Message from STM32 ... \r\n";
+char esp_rx_buffer[ESP_RX_BUFFER_SIZE];
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -61,12 +71,72 @@ static void MX_SPI1_Init(void);
 static void MX_USB_PCD_Init(void);
 static void MX_USART1_UART_Init(void);
 static void MX_USART2_UART_Init(void);
+static int ESP_SendCommand(const char* command, const char* ack, uint32_t timeout);
+
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+static int ESP_SendCommand(const char* command, const char* ack, uint32_t timeout)
+{
+    uint8_t ch = 0;
+    uint16_t idx = 0;
+    uint32_t tickstart;
+    int found = 0;
+
+    memset(esp_rx_buffer, 0, sizeof(esp_rx_buffer));
+    tickstart = HAL_GetTick();
+
+    if (strlen(command) > 0)
+    {
+        DEBUG_LOG("Sending: %s", command);
+        if (HAL_UART_Transmit(&huart1, (uint8_t*)command, strlen(command), HAL_MAX_DELAY) != HAL_OK)
+        {
+            DEBUG_LOG("Transmission failed");
+            return 0;
+        }
+    }
+
+    while((HAL_GetTick() - tickstart) < timeout && idx < sizeof(esp_rx_buffer) - 1)
+    {
+        if(HAL_UART_Receive(&huart1, &ch, 1, 10) == HAL_OK)
+        {
+            esp_rx_buffer[idx++] = ch;
+            esp_rx_buffer[idx] = '\0';
+
+            // Check for acknowledgment
+            if (!found && strstr(esp_rx_buffer, ack))
+            {
+                DEBUG_LOG("Matched ACK: %s", ack);
+                found = 1;
+            }
+
+            // Handle busy response
+            if(strstr(esp_rx_buffer, "busy"))
+            {
+                DEBUG_LOG("ESP is busy, waiting...");
+                HAL_Delay(1500);
+                idx = 0;
+                memset(esp_rx_buffer, 0, sizeof(esp_rx_buffer));
+                tickstart = HAL_GetTick(); // Reset timeout
+                continue;
+            }
+        }
+    }
+
+    if (found)
+    {
+        DEBUG_LOG("Response: %s", esp_rx_buffer);
+    }
+    else
+    {
+        DEBUG_LOG("Timeout or ACK not received");
+    }
+
+    return found;
+}
 
 /* USER CODE END 0 */
 
@@ -105,6 +175,9 @@ int main(void)
   MX_USART1_UART_Init();
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
+  HAL_Delay(1000); // Wait for ESP to be ready
+  ESP_SendCommand("ATE0\r\n", "OK", 2000);
+  HAL_Delay(500);
 
   /* USER CODE END 2 */
 
@@ -115,52 +188,35 @@ int main(void)
 
 	  /* USER CODE END WHILE */
 	  /* USER CODE BEGIN 3 */
-      uint8_t rx_buffer[100] = {0};  // Initialize to zero
-      uint16_t rx_index = 0;
+	  if (ESP_SendCommand("AT\r\n", "OK", 2000))
+	      {
+	          HAL_GPIO_WritePin(GPIOE, GPIO_PIN_10, GPIO_PIN_SET);
 
-      // Send AT command
-      HAL_UART_Transmit(&huart1, (uint8_t*)"AT\r\n", 4, 1000);
+	          // Set WiFi mode to Station
+	          if (ESP_SendCommand("AT+CWJAP=\"ssid\",\"password\"\r\n", "OK", 15000))
+	          {
+	              // WiFi connected successfully
+	              HAL_GPIO_WritePin(GPIOE, GPIO_PIN_14, GPIO_PIN_SET);
+	              DEBUG_LOG("WiFi connected successfully!");
 
-      // Receive response byte-by-byte with timeout
-      uint32_t start_time = HAL_GetTick();
-      while ((HAL_GetTick() - start_time) < 2000)  // 2 second total timeout
-      {
-          uint8_t byte;
-          if (HAL_UART_Receive(&huart1, &byte, 1, 100) == HAL_OK)  // 100ms timeout per byte
-          {
-              rx_buffer[rx_index++] = byte;
+	              if(ESP_SendCommand("AT+CIPSTA?\r\n", "OK", 5000)){
+	                  HAL_GPIO_WritePin(GPIOE, GPIO_PIN_12, GPIO_PIN_SET);
+	              }
+	          }
+			  else
+			  {
+				  // WiFi connection failed
+				  HAL_GPIO_WritePin(GPIOE, GPIO_PIN_14, GPIO_PIN_RESET);
+				  DEBUG_LOG("WiFi connection failed!");
+			  }
+	      }
+	      else
+	      {
+	          HAL_GPIO_WritePin(GPIOE, GPIO_PIN_10, GPIO_PIN_RESET);
+	          DEBUG_LOG("ESP not responding");
+	      }
 
-              // Reset timeout when we receive data
-              start_time = HAL_GetTick();
-
-              // Stop if buffer almost full
-              if (rx_index >= 99) break;
-
-              // stop after receiving complete response
-              // when we see \n after "OK"
-              if (rx_index >= 4 &&
-                  rx_buffer[rx_index-1] == '\n' &&
-                  strstr((char*)rx_buffer, "OK") != NULL)
-              {
-                  break;
-              }
-          }
-      }
-
-      // Null terminate the string
-      rx_buffer[rx_index] = '\0';
-
-      // Check response
-      if (strstr((char*)rx_buffer, "OK") != NULL)
-      {
-          HAL_GPIO_WritePin(GPIOE, GPIO_PIN_10, GPIO_PIN_SET);
-      }
-      else
-      {
-          HAL_GPIO_WritePin(GPIOE, GPIO_PIN_10, GPIO_PIN_RESET);
-      }
-
-      HAL_Delay(1000);
+	      HAL_Delay(5000);
 
 
   }
@@ -429,7 +485,7 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOE, CS_I2C_SPI_Pin|LD4_Pin|LD3_Pin|GPIO_PIN_10
+  HAL_GPIO_WritePin(GPIOE, CS_I2C_SPI_Pin|LD4_Pin|LD3_Pin|GPIO_PIN_10|GPIO_PIN_14|GPIO_PIN_12
                           |LD7_Pin|LD9_Pin|LD10_Pin|LD8_Pin
                           |LD6_Pin, GPIO_PIN_RESET);
 
@@ -444,7 +500,7 @@ static void MX_GPIO_Init(void)
   /*Configure GPIO pins : CS_I2C_SPI_Pin LD4_Pin LD3_Pin PE10
                            LD7_Pin LD9_Pin LD10_Pin LD8_Pin
                            LD6_Pin */
-  GPIO_InitStruct.Pin = CS_I2C_SPI_Pin|LD4_Pin|LD3_Pin|GPIO_PIN_10
+  GPIO_InitStruct.Pin = CS_I2C_SPI_Pin|LD4_Pin|LD3_Pin|GPIO_PIN_10|GPIO_PIN_14|GPIO_PIN_12
                           |LD7_Pin|LD9_Pin|LD10_Pin|LD8_Pin
                           |LD6_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;

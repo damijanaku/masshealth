@@ -1,6 +1,6 @@
 from django.urls import path
 from rest_framework_simplejwt.views import TokenRefreshView
-from . import views
+from . import views, admin_views
 from masshealth.api.views import get_mqtt_credentials
 
 urlpatterns = [
@@ -51,4 +51,12 @@ urlpatterns = [
          views.add_workout_to_routine, name='add-workout-to-routine'),
      path('routines/<int:routine_id>/workouts/<int:workout_order>/delete/', 
          views.remove_workout_from_routine, name='remove-workout-from-routine'),
+
+    path('api/admin/check/', admin_views.admin_check, name='admin-check'),
+    path('api/admin/list/', admin_views.list_admins, name='list-admins'),
+    path('api/admin/users/', admin_views.list_all_users, name='list-all-users'),
+    path('api/admin/create/', admin_views.create_admin, name='create-admin'),
+    path('api/admin/promote/<int:user_id>/', admin_views.promote_to_admin, name='promote-admin'),
+    path('api/admin/demote/<int:user_id>/', admin_views.demote_admin, name='demote-admin'),
+    path('api/admin/delete/<int:user_id>/', admin_views.delete_user, name='delete-user'),
 ]

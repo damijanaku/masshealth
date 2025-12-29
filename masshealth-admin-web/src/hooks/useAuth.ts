@@ -21,8 +21,9 @@ export function useAuth() {
       
       setAuth(user, access);
       return true;
-    } catch (err: any) {
-      const message = err.response?.data?.message || err.message || 'Login failed';
+    } catch (err: unknown) {
+      const error = err as { response?: { data?: { message?: string } }; message?: string };
+      const message = error.response?.data?.message || error.message || 'Login failed';
       setError(message);
       return false;
     } finally {

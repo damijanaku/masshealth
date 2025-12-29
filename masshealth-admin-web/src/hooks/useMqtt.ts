@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { mqttService } from '../services/mqtt';
-import { MQTTLocationMessage } from '../types';
+import type { MQTTLocationMessage } from '../types';
 
 export function useMqtt() {
   const [isConnected, setIsConnected] = useState(false);

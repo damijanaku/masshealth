@@ -15,29 +15,23 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 function App() {
-  const hostname = typeof window !== 'undefined' ? window.location.hostname : '';
-  const isAdminSubdomain = hostname.startsWith('admin.');
-
   return (
     <BrowserRouter>
       <Routes>
-        {isAdminSubdomain ? (
-          <>
-            <Route path="/login" element={<AdminLogin />} />
-            <Route path="/" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </>
-        ) : (
-          <>
-            <Route path="/" element={<LandingPage />} />
-            <Route path="/admin/login" element={<AdminLogin />} />
-            <Route path="/admin" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </>
-        )}
+        <Route path="/" element={<LandingPage />} />
+        <Route path="/admin/login" element={<AdminLogin />} />
+        <Route 
+          path="/admin" 
+          element={
+            <ProtectedRoute>
+              <AdminDashboard />
+            </ProtectedRoute>
+          } 
+        />
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
   );
 }
 
-export default App;
+export default App

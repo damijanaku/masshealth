@@ -1,5 +1,6 @@
-import mqtt, { MqttClient } from 'mqtt';
-import { MQTTLocationMessage } from '../types';
+import mqtt from 'mqtt';
+import type { MqttClient } from 'mqtt';
+import type { MQTTLocationMessage } from '../types';
 
 type MessageCallback = (message: MQTTLocationMessage) => void;
 type ConnectionCallback = (connected: boolean) => void;
@@ -30,7 +31,7 @@ class MQTTService {
         this.client?.subscribe('user/+/location');
       });
 
-      this.client.on('message', (topic, payload) => {
+      this.client.on('message', (_topic, payload) => {
         try {
           const message = JSON.parse(payload.toString()) as MQTTLocationMessage;
           this.messageCallbacks.forEach(cb => cb(message));

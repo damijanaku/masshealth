@@ -12,3 +12,13 @@ A Django-based health and fitness tracking application.
 
 2. **Access the app through setup.bat**
    Click twice on setup.bat to run it, read the screen instructions to run the app, don't forget to open MQTT explorer and connect on localhost as 'host'
+
+3. **Checkout the website?**
+
+   ```bash
+   cd masshealth-admin-web
+   npm i
+   npm run dev
+   ```
+
+(If you don't have an admin, initialize on in django with `python manage.py create_admin --email=admin@example.com --password=adminadmin --username=admin`)

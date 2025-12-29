@@ -2,17 +2,7 @@
 /**
   ******************************************************************************
   * @file           : main.c
-  * @brief          : Main program body
-  ******************************************************************************
-  * @attention
-  *
-  * Copyright (c) 2025 STMicroelectronics.
-  * All rights reserved.
-  *
-  * This software is licensed under terms that can be found in the LICENSE file
-  * in the root directory of this software component.
-  * If no LICENSE file comes with this software, it is provided AS-IS.
-  *
+  * @brief          : Main program body with MQTT support
   ******************************************************************************
   */
 /* USER CODE END Header */
@@ -37,6 +27,13 @@
 #define ENABLE_USER_LOG 1
 #define DISABLE_USER_LOG 0
 #define ESP_RX_BUFFER_SIZE 512
+#define MQTT_PACKET_SIZE 256
+
+#if ENABLE_USER_LOG
+#define USER_LOG(fmt, ...) printf("[USER] " fmt "\r\n", ##__VA_ARGS__)
+#else
+#define USER_LOG(fmt, ...)
+#endif
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -61,6 +58,7 @@ PCD_HandleTypeDef hpcd_USB_FS;
 
 /* USER CODE BEGIN PV */
 char esp_rx_buffer[ESP_RX_BUFFER_SIZE];
+uint8_t mqtt_packet[MQTT_PACKET_SIZE];
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -72,6 +70,12 @@ static void MX_USB_PCD_Init(void);
 static void MX_USART1_UART_Init(void);
 static void MX_USART2_UART_Init(void);
 static int ESP_SendCommand(const char* command, const char* ack, uint32_t timeout);
+static int ESP_SendBinary(const uint8_t* data, uint16_t len, const char* ack, uint32_t timeout);
+static int MQTT_BuildConnect(uint8_t *packet, const char *clientID, const char *username, const char *password, uint16_t keepalive);
+static int ESP_MQTT_Connect(const char *broker, uint16_t port, const char *clientID, const char *username, const char *password, uint16_t keepalive);
+static int MQTT_BuildPublish(uint8_t *packet, const char *topic, const char *message, uint8_t qos);
+static int ESP_MQTT_Publish(const char *topic, const char *message, uint8_t qos);
+static int ESP_HTTP_Login(const char *url, const char *username, const char *password);
 
 /* USER CODE BEGIN PFP */
 
@@ -138,6 +142,229 @@ static int ESP_SendCommand(const char* command, const char* ack, uint32_t timeou
     return found;
 }
 
+static int ESP_SendBinary(const uint8_t* data, uint16_t len, const char* ack, uint32_t timeout)
+{
+    uint8_t ch = 0;
+    uint16_t idx = 0;
+    uint32_t tickstart;
+    int found = 0;
+
+    memset(esp_rx_buffer, 0, sizeof(esp_rx_buffer));
+    tickstart = HAL_GetTick();
+
+    // Send binary data
+    if (HAL_UART_Transmit(&huart1, (uint8_t*)data, len, HAL_MAX_DELAY) != HAL_OK)
+    {
+        DEBUG_LOG("Binary transmission failed");
+        return 0;
+    }
+
+    // Wait for acknowledgment
+    while((HAL_GetTick() - tickstart) < timeout && idx < sizeof(esp_rx_buffer) - 1)
+    {
+        if(HAL_UART_Receive(&huart1, &ch, 1, 10) == HAL_OK)
+        {
+            esp_rx_buffer[idx++] = ch;
+            esp_rx_buffer[idx] = '\0';
+
+            // Check for binary acknowledgment (CONNACK starts with 0x20)
+            if (!found && (strchr(esp_rx_buffer, ack[0]) != NULL))
+            {
+                DEBUG_LOG("Binary ACK received");
+                found = 1;
+            }
+
+            if(strstr(esp_rx_buffer, "SEND OK"))
+            {
+                DEBUG_LOG("SEND OK received");
+                if (found) break;
+            }
+        }
+    }
+
+    return found;
+}
+
+static int MQTT_BuildConnect(uint8_t *packet, const char *clientID, const char *username, const char *password, uint16_t keepalive)
+{
+    int len = 0;
+    /* Fixed Header */
+    packet[len++] = 0x10;   // CONNECT packet type
+    int remLenPos = len++;  // Remaining length placeholder
+
+    /* Variable Header */
+    packet[len++] = 0x00; packet[len++] = 0x04;
+    packet[len++] = 'M'; packet[len++] = 'Q'; packet[len++] = 'T'; packet[len++] = 'T';
+    packet[len++] = 0x04;   // Protocol Level = 4 (MQTT 3.1.1)
+
+    uint8_t connectFlags = 0x02; // Clean Session
+    if (username) connectFlags |= 0x80;
+    if (password) connectFlags |= 0x40;
+    packet[len++] = connectFlags;
+
+    // Keep Alive
+    packet[len++] = (keepalive >> 8) & 0xFF;
+    packet[len++] = (keepalive & 0xFF);
+
+    /* Payload */
+    // Client ID
+    uint16_t cid_len = strlen(clientID);
+    packet[len++] = cid_len >> 8;
+    packet[len++] = cid_len & 0xFF;
+    memcpy(&packet[len], clientID, cid_len); len += cid_len;
+
+    // Username
+    if (username) {
+        uint16_t ulen = strlen(username);
+        packet[len++] = ulen >> 8;
+        packet[len++] = ulen & 0xFF;
+        memcpy(&packet[len], username, ulen); len += ulen;
+    }
+
+    // Password
+    if (password) {
+        uint16_t plen = strlen(password);
+        packet[len++] = plen >> 8;
+        packet[len++] = plen & 0xFF;
+        memcpy(&packet[len], password, plen); len += plen;
+    }
+
+    // Remaining length from Fixed Header
+    packet[remLenPos] = len - 2;  // remove first 2 bytes of Fixed Header
+    return len;
+}
+
+static int ESP_MQTT_Connect(const char *broker, uint16_t port, const char *clientID,
+                                       const char *username, const char *password, uint16_t keepalive)
+{
+    char cmd[128];
+    int res;
+    int len;
+
+    /****** Step 1: TCP connect ******/
+    snprintf(cmd, sizeof(cmd), "AT+CIPSTART=\"TCP\",\"%s\",%d\r\n", broker, port);
+    res = ESP_SendCommand(cmd, "CONNECT", 5000);
+    if (!res){
+        DEBUG_LOG("CIPSTART Failed..");
+        return 0;
+    }
+
+    HAL_Delay(500);
+
+    /****** Step 2: Build MQTT CONNECT packet ******/
+    len = MQTT_BuildConnect(mqtt_packet, clientID, username, password, keepalive);
+
+    /****** Step 3: Tell ESP how many bytes to send ******/
+    snprintf(cmd, sizeof(cmd), "AT+CIPSEND=%d\r\n", len);
+    res = ESP_SendCommand(cmd, ">", 2000);
+    if (!res){
+        DEBUG_LOG("CIPSEND Failed..");
+        return 0;
+    }
+
+    /****** Step 4: Send packet and wait for CONNACK ******/
+    res = ESP_SendBinary(mqtt_packet, len, "\x20", 5000);
+    if (!res){
+        DEBUG_LOG("Send Connect Command Failed..");
+        USER_LOG("MQTT CONNACK failed.");
+        return 0;
+    }
+
+    USER_LOG("MQTT CONNACK received, broker accepted connection.");
+    return 1;
+}
+
+static int MQTT_BuildPublish(uint8_t *packet, const char *topic, const char *message, uint8_t qos)
+{
+    int len = 0;
+
+    /* Fixed Header */
+    packet[len++] = 0x30 | (qos << 1); // PUBLISH, QoS
+    int remLenPos = len++;  // will be calculated later
+
+    /* Variable Header */
+    // Topic
+    uint16_t tlen = strlen(topic);
+    packet[len++] = tlen >> 8;  // store topic len
+    packet[len++] = tlen & 0xFF;  // store topic len
+    memcpy(&packet[len], topic, tlen); len += tlen;  // store topic
+
+    /* Payload */
+    // Message
+    uint16_t mlen = strlen(message);
+    memcpy(&packet[len], message, mlen); len += mlen;  // store message
+
+    // Remaining length
+    packet[remLenPos] = len - 2;  // remove first 2 bytes of Fixed Header
+    return len;
+}
+
+static int ESP_MQTT_Publish(const char *topic, const char *message, uint8_t qos)
+{
+    char cmd[128];
+    int res;
+    int len;
+
+    /****** Step 1: Build MQTT PUBLISH packet ******/
+    len = MQTT_BuildPublish(mqtt_packet, topic, message, qos);
+
+    /****** Step 2: Tell ESP how many bytes to send  ******/
+    snprintf(cmd, sizeof(cmd), "AT+CIPSEND=%d\r\n", len);
+    res = ESP_SendCommand(cmd, ">", 2000);
+    if (!res){
+        DEBUG_LOG("CIPSEND Failed..");
+        return 0;
+    }
+
+    /****** Step 3: Send packet and wait for ACK ******/
+    res = ESP_SendBinary(mqtt_packet, len, "SEND OK", 5000);
+    if (!res){
+        DEBUG_LOG("Publish Command Failed..");
+        return 0;
+    }
+
+    USER_LOG("Message published successfully to topic: %s", topic);
+    return 1;
+}
+
+int HTTP_ConfigureUrl(const char *url) {
+    char at_cmd[64];
+    uint16_t url_len = strlen(url);
+    int res;
+
+    // Step 1: Send the length and wait for the '>' prompt
+    snprintf(at_cmd, sizeof(at_cmd), "AT+HTTPURLCFG=%d\r\n", url_len);
+    res = ESP_SendCommand(at_cmd, ">", 2000);
+    if (!res) {
+        DEBUG_LOG("URL length config Failed (no prompt)");
+        return 0;
+    }
+
+    // Step 2: Send the actual URL data (no \r\n at the end of the raw data)
+    if (HAL_UART_Transmit(&huart1, (uint8_t*)url, url_len, HAL_MAX_DELAY) != HAL_OK) {
+        DEBUG_LOG("URL transmit Failed");
+        return 0;
+    }
+
+    // Step 3: Wait for "OK" (Note: some firmware versions return "SET OK", some just "OK")
+    res = ESP_SendCommand("", "OK", 3000);
+    if (!res) {
+        DEBUG_LOG("URL data confirmation Failed");
+        return 0;
+    }
+
+
+    USER_LOG("URL Configured Successfully!");
+    return 1;
+}
+
+static int ESP_HTTP_Login(const char *url,
+                          const char *email,
+                          const char *password)
+{
+}
+
+
 /* USER CODE END 0 */
 
 /**
@@ -184,45 +411,81 @@ int main(void)
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
-  {
+    {
+        /* USER CODE END WHILE */
+        /* USER CODE BEGIN 3 */
+        if (ESP_SendCommand("AT\r\n", "OK", 2000))
+        {
+            HAL_GPIO_WritePin(GPIOE, GPIO_PIN_10, GPIO_PIN_SET);
 
-	  /* USER CODE END WHILE */
-	  /* USER CODE BEGIN 3 */
-	  if (ESP_SendCommand("AT\r\n", "OK", 2000))
-	      {
-	          HAL_GPIO_WritePin(GPIOE, GPIO_PIN_10, GPIO_PIN_SET);
-
-	          // Set WiFi mode to Station
-	          if (ESP_SendCommand("AT+CWJAP=\"ssid\",\"password\"\r\n", "OK", 15000))
-	          {
-	              // WiFi connected successfully
-	              HAL_GPIO_WritePin(GPIOE, GPIO_PIN_14, GPIO_PIN_SET);
-	              DEBUG_LOG("WiFi connected successfully!");
-
-	              if(ESP_SendCommand("AT+CIPSTA?\r\n", "OK", 5000)){
-	                  HAL_GPIO_WritePin(GPIOE, GPIO_PIN_12, GPIO_PIN_SET);
-	              }
-	          }
-			  else
-			  {
-				  // WiFi connection failed
-				  HAL_GPIO_WritePin(GPIOE, GPIO_PIN_14, GPIO_PIN_RESET);
-				  DEBUG_LOG("WiFi connection failed!");
-			  }
-	      }
-	      else
-	      {
-	          HAL_GPIO_WritePin(GPIOE, GPIO_PIN_10, GPIO_PIN_RESET);
-	          DEBUG_LOG("ESP not responding");
-	      }
-
-	      HAL_Delay(5000);
+            // Connect to WiFi
+            if (ESP_SendCommand("AT+CWJAP=\"username\",\"password\"\r\n", "OK", 15000))
+            {
+                // WiFi connected successfully
+                HAL_GPIO_WritePin(GPIOE, GPIO_PIN_14, GPIO_PIN_SET);
+                DEBUG_LOG("WiFi connected successfully!");
 
 
+                // Now attempt MQTT connection
+                USER_LOG("Attempting MQTT connection...");
+                if (ESP_MQTT_Connect("broker.hivemq.com", 1883, "STM32_Client", NULL, NULL, 60))
+                {
+                    // MQTT connected successfully
+                    //HAL_GPIO_WritePin(GPIOE, LD6_Pin, GPIO_PIN_SET);
+                    USER_LOG("MQTT connection established!");
+
+                    // Publish a message to topic "esp"
+                    if (ESP_MQTT_Publish("esp", "Hello from STM32!", 0))
+                    {
+                        USER_LOG("Published message to topic 'esp'");
+                    }
+                    else
+                    {
+                        USER_LOG("Failed to publish message");
+                    }
+                }
+                else
+                {
+                    // MQTT connection failed
+                    //HAL_GPIO_WritePin(GPIOE, LD6_Pin, GPIO_PIN_RESET);
+                    USER_LOG("MQTT connection failed!");
+                }
+
+                // testing api call
+                if (ESP_SendCommand("AT+HTTPCLIENT=2,0,\"http://192.168.1.71:8000/api/auth/routines/\",,,1\r\n", "+HTTPCLIENT", 10000))
+                {
+                    USER_LOG("HTTP GET request sent successfully!");
+
+                    // The response will be in esp_rx_buffer
+                    // You can parse the +HTTPCLIENT response here
+                    USER_LOG("Response: %s", esp_rx_buffer);
+                }
+                else
+                {
+                    USER_LOG("HTTP GET request failed!");
+                }
+
+
+
+            }
+            else
+            {
+                // WiFi connection failed
+                HAL_GPIO_WritePin(GPIOE, GPIO_PIN_14, GPIO_PIN_RESET);
+                DEBUG_LOG("WiFi connection failed!");
+            }
+        }
+        else
+        {
+            HAL_GPIO_WritePin(GPIOE, GPIO_PIN_10, GPIO_PIN_RESET);
+            DEBUG_LOG("ESP not responding");
+        }
+
+        HAL_Delay(5000);
+    }
+
+    /* USER CODE END 3 */
   }
-
-  /* USER CODE END 3 */
-}
 
 /**
   * @brief System Clock Configuration

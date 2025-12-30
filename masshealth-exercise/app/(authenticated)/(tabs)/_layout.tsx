@@ -52,7 +52,7 @@ const LoggedLayout = () => {
           <Tabs.Screen
               name="activity"
               options={{
-              title: "Activity",
+              title: "Challenge",
               tabBarActiveTintColor: "#6E49EB",
               headerShown: false,
               tabBarIcon: ({ color }) => (

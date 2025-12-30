@@ -254,6 +254,24 @@ class Routine(SyncToSupabaseMixin, models.Model):
     class Meta:
         ordering = ['-created_at']
 
+class Challenge(SyncToSupabaseMixin, models.Model):
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('accepted', 'Accepted'),
+        ('completed', 'Completed'),
+        ('declined', 'Declined'),
+    ]
+
+    from_user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='challenges_sent')
+    to_user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='challenges_received')
+    routine = models.ForeignKey(Routine, on_delete=models.CASCADE)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    created_at = models.DateTimeField(auto_now_add=True)
+    responded_at = models.DateTimeField(null=True, blank=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+
 class Workout(SyncToSupabaseMixin, models.Model):
     EXPERIENCE_LEVELS = [
         ('beginner', 'Beginner'),

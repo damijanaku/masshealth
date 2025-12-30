@@ -33,7 +33,9 @@ ALLOWED_HOSTS = [
     '192.168.*',  # Local network range
     '192.168.1.18',
     '10.255.159.209',
-    '164.8.222.74'
+    '164.8.222.74',
+    '192.168.1.71'
+
 ]
 
 # Application definition

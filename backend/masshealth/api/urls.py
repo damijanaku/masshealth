@@ -23,6 +23,10 @@ urlpatterns = [
     path('pending-requests/', views.get_pending_requests, name="pending_requests"),
     path('friends-list/', views.get_friends_list, name="friends_list"),
     path('search-users/', views.search_users, name="search_users"),
+    path('challenge/<int:friendId>/<int:routineId>/', views.challenge_friend, name='challenge_friend'),
+    path('challenge/<int:challengeId>/accept/', views.accept_challenge, name='accept_challenge'),
+    path('challenge/<int:challengeId>/decline/', views.decline_challenge, name='decline_challenge'),
+    path('challenges/pending/', views.get_pending_challenges, name='get_pending_challenges'),
     
     path('workouts/', views.WorkoutListView.as_view(), name="workout-list"), 
     path('workouts/muscle-group/<str:muscle_group_name>/', 

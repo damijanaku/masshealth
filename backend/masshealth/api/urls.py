@@ -27,6 +27,13 @@ urlpatterns = [
     path('challenge/<int:challengeId>/accept/', views.accept_challenge, name='accept_challenge'),
     path('challenge/<int:challengeId>/decline/', views.decline_challenge, name='decline_challenge'),
     path('challenges/pending/', views.get_pending_challenges, name='get_pending_challenges'),
+    path('challenge/<int:challengeId>/routine/', views.get_challenge_routine_detail, name='challenge-routine-detail'),
+
+
+    path('notifications/token/', views.save_notification_token, name='save-notification-token'),
+    path('notifications/token/update/', views.update_notification_token, name='update-notification-token'),
+    path('notifications/token/get/', views.get_notification_token, name='get-notification-token'),
+    path('notifications/token/delete/', views.delete_notification_token, name='delete-notification-token'),
     
     path('workouts/', views.WorkoutListView.as_view(), name="workout-list"), 
     path('workouts/muscle-group/<str:muscle_group_name>/', 

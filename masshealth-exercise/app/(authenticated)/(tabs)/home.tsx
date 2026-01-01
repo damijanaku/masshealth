@@ -10,6 +10,10 @@ import CustomAlert from '../../../components/CustomAlert';
 //EXPO GO USERS!! zakomentiraj hooks in rocno nastavi steps, flights, distance
 import privateApi, { publicApi } from '../../../api';
 import { useUser } from '@/hooks/useUser';
+import ChallengePopUp from '../../../components/challengePopUp';
+
+import { getApp } from '@react-native-firebase/app';
+import { getMessaging, AuthorizationStatus } from '@react-native-firebase/messaging';
 
 const width = Dimensions.get('window').width;
 const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -21,13 +25,13 @@ const home = () => {
   // Initialize with today's date
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [image, setImage] = useState<string | null>(null);
+  const [challenges, setChallenges] = useState<any[]>([]);
+  const [challengePopUpVisible, setChallengePopUpVisible] = useState(false);
 
   // Use selectedDate instead of the fixed date
   //const androidHealthData = useHealthData(selectedDate);
   //const iosHealthData = useHealthDataios(selectedDate)
   
-  
-
   const today = new Date();
   const todayIndex = today.getDay() === 0 ? 6 : today.getDay() - 1; // Monday = 0, Sunday = 6
   
@@ -62,13 +66,134 @@ const home = () => {
       //When you have iOS hook ready, use it here
       //sleep = iosHealthData.sleepingHours;
       //calories = iosHealthData.calories;
-    } else if (Platform.OS === 'android') {
+  } else if (Platform.OS === 'android') {
       //steps = androidHealthData.steps;
       //flights = androidHealthData.flights;
       //distance = androidHealthData.distance;
       sleep = 0;
       calories = 0;
+  }
+
+  async function requestUserPermission() {
+    if (Platform.OS === 'ios') {
+      const app = getApp();
+      const messaging = getMessaging(app);
+      
+      const authStatus = await messaging.requestPermission();
+      const enabled = 
+        authStatus === AuthorizationStatus.AUTHORIZED ||
+        authStatus === AuthorizationStatus.PROVISIONAL;
+  
+      if (enabled) {
+        console.log('Authorization status:', authStatus);
+      }
+      
+      return enabled;
     }
+    
+    return true;
+  }
+
+  const saveTokenToBackend = async (token: string) => {
+    try {
+      const response = await privateApi.post('api/auth/notifications/token/', {
+        token: token,
+        device_type: Platform.OS, 
+      });
+      
+      console.log('Token saved successfully:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('Error saving token:', error);
+      throw error;
+    }
+  };
+
+  const getToken = async () => {
+    try {
+      const app = getApp();
+      const messaging = getMessaging(app);
+      const token = await messaging.getToken();
+      console.log("Token:", token);
+      
+      // Save token to backend
+      if (token) {
+        await saveTokenToBackend(token);
+      }
+      
+      return token;
+    } catch (error) {
+      console.error("Error getting token:", error);
+    }
+  }
+
+  const getChallenge = async () => {
+    try {
+      const response = await privateApi.get('api/auth/challenges/pending/');
+      console.log('Pending challenges:', response.data);
+      
+      const fetchedChallenges = response.data.challenges;
+      
+      if (fetchedChallenges && fetchedChallenges.length > 0) {
+        setChallenges(fetchedChallenges);
+        setChallengePopUpVisible(true);
+      }
+      
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching pending challenges:', error);
+    }
+  }
+
+  const handleAcceptChallenge = async (challengeId: number) => {
+    try {
+      const response = await privateApi.post(`api/auth/challenge/${challengeId}/accept/`);
+      console.log(`Challenge ${challengeId} accepted:`, response.data);
+      
+      // Remove accepted challenge from list
+      setChallenges(prev => prev.filter(c => c.id !== challengeId));
+      
+      // Close popup if no more challenges
+      if (challenges.length === 1) {
+        setChallengePopUpVisible(false);
+      }
+      
+      } catch (error) {
+        console.error('Error accepting challenge:', error);
+        setCustomAlertMessage('Failed to accept challenge');
+        setCustomAlertVisible(true);
+      }
+  };
+  
+  const handleDeclineChallenge = async (challengeId: number) => {
+    try {
+      const response = await privateApi.post(`api/auth/challenge/${challengeId}/decline/`);
+      console.log(`Challenge ${challengeId} declined:`, response.data);
+      
+      // Remove declined challenge from list
+      setChallenges(prev => prev.filter(c => c.id !== challengeId));
+      
+      // Close popup if no more challenges
+      if (challenges.length === 1) {
+        setChallengePopUpVisible(false);
+      }
+      
+      setCustomAlertMessage('Challenge declined');
+      setCustomAlertVisible(true);
+    } catch (error) {
+      console.error('Error declining challenge:', error);
+      setCustomAlertMessage('Failed to decline challenge');
+      setCustomAlertVisible(true);
+    }
+  };
+
+
+  useEffect(() => {
+    requestUserPermission();
+    getToken();
+    getChallenge();
+  }, [])
+
 
   return (
     <SafeAreaView style={styles.container}>
@@ -143,6 +268,13 @@ const home = () => {
         title="Error"
         message={customAlertMessage}
         onClose={() => setCustomAlertVisible(false)}
+      />
+      <ChallengePopUp
+        challenges={challenges}
+        visible={challengePopUpVisible}
+        onAccept={handleAcceptChallenge}
+        onDecline={handleDeclineChallenge}
+        onClose={() => setChallengePopUpVisible(false)}
       />
     </SafeAreaView>
   );

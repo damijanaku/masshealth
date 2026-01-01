@@ -953,3 +953,157 @@ def get_workout_modes(request):
             for mode in RoutineWorkout.WORKOUT_MODES
         ]
     })
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def save_notification_token(request):
+    try:
+        token = request.data.get('token')
+        
+        if not token:
+            return Response({
+                'success': False,
+                'message': 'Token is required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Get or create user metadata
+        metadata, created = UserMetadata.objects.get_or_create(
+            user=request.user,
+            defaults={'username': f'user_{request.user.id}'}
+        )
+        
+        # Update the token
+        metadata.notification_token  = token
+        metadata.save()
+        
+        return Response({
+            'success': True,
+            'message': 'Notification token saved successfully',
+            'token': token
+        }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        return Response({
+            'success': False,
+            'error': f'An error occurred: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+@api_view(['PUT'])
+@permission_classes([permissions.IsAuthenticated])
+def update_notification_token(request):
+
+    try:
+        token = request.data.get('token')
+        
+        if not token:
+            return Response({
+                'success': False,
+                'message': 'Token is required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        metadata = get_object_or_404(UserMetadata, user=request.user)
+        
+        old_token = metadata.notification_token 
+        metadata.notification_token  = token
+        metadata.save()
+        
+        return Response({
+            'success': True,
+            'message': 'Notification token updated successfully',
+            'old_token': old_token,
+            'new_token': token
+        }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        return Response({
+            'success': False,
+            'error': f'An error occurred: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def get_notification_token(request):
+    try:
+        metadata, created = UserMetadata.objects.get_or_create(
+            user=request.user,
+            defaults={'username': f'user_{request.user.id}'}
+        )
+        
+        return Response({
+            'success': True,
+            'token': metadata.notification_token ,
+            'has_token': metadata.notification_token  is not None
+        }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        return Response({
+            'success': False,
+            'error': f'An error occurred: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['DELETE'])
+@permission_classes([permissions.IsAuthenticated])
+def delete_notification_token(request):
+    try:
+        metadata = get_object_or_404(UserMetadata, user=request.user)
+        
+        if not metadata.notification_token :
+            return Response({
+                'success': False,
+                'message': 'No notification token found'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        metadata.notification_token = None
+        metadata.save()
+        
+        return Response({
+            'success': True,
+            'message': 'Notification token removed successfully'
+        }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        return Response({
+            'success': False,
+            'error': f'An error occurred: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def get_challenge_routine_detail(request, challengeId):
+    try:
+        # Get the challenge - user must be either sender or receiver
+        challenge = get_object_or_404(
+            Challenge, 
+            id=challengeId
+        )
+        
+        # Verify user is part of this challenge
+        if challenge.from_user != request.user and challenge.to_user != request.user:
+            return Response({
+                'success': False,
+                'error': 'You do not have permission to view this challenge'
+            }, status=status.HTTP_403_FORBIDDEN)
+        
+        # Get the routine from the challenge
+        routine = challenge.routine
+        
+        # Serialize the routine with full details
+        serializer = RoutineDetailSerializer(routine)
+        
+        return Response({
+            'success': True,
+            'routine': serializer.data,
+            'challenge_info': {
+                'id': challenge.id,
+                'status': challenge.status,
+                'from_user': challenge.from_user.full_name,
+                'to_user': challenge.to_user.full_name,
+                'created_at': challenge.created_at
+            }
+        }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        return Response({
+            'success': False,
+            'error': f'An error occurred: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

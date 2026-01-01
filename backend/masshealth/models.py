@@ -179,6 +179,12 @@ class UserMetadata(SyncToSupabaseMixin, models.Model):
     fitness_experience = models.CharField(max_length=20, choices=FITNESS_EXPERIENCE_CHOICES, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    notification_token = models.CharField(
+        max_length=255, 
+        null=True, 
+        blank=True,
+        help_text="Push notification token for mobile devices"
+    )
 
     profile_image = models.ImageField(
         upload_to=profile_image_path,

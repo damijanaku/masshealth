@@ -712,8 +712,24 @@ class RoutineDetailView(generics.RetrieveAPIView):
     serializer_class = RoutineDetailSerializer
     permission_classes = [permissions.IsAuthenticated]
 
-    def get_queryset(self):  
-        return Routine.objects.filter(user=self.request.user)
+    def get_queryset(self):
+        user = self.request.user
+        routine_id = self.kwargs.get('pk')
+        
+        # Check if user can access this routine through a challenge
+        has_challenge_access = Challenge.objects.filter(
+            routine_id=routine_id,
+            status='accepted'  # Only accepted challenges
+        ).filter(
+            models.Q(from_user=user) | models.Q(to_user=user)
+        ).exists()
+        
+        if has_challenge_access:
+            # User has access through an accepted challenge
+            return Routine.objects.filter(id=routine_id)
+        
+        # Otherwise, only show own routines
+        return Routine.objects.filter(user=user)
 
 class RoutineListView(generics.ListAPIView):
     serializer_class = RoutineSerializer
@@ -1100,6 +1116,43 @@ def get_challenge_routine_detail(request, challengeId):
                 'to_user': challenge.to_user.full_name,
                 'created_at': challenge.created_at
             }
+        }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        return Response({
+            'success': False,
+            'error': f'An error occurred: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def get_accepted_challenges(request):
+    try:
+        accepted_challenges = Challenge.objects.filter(
+            to_user=request.user,
+            status='accepted'
+        )
+        
+        challenges_data = []
+        for challenge in accepted_challenges:
+            challenges_data.append({
+                'id': challenge.id,
+                'from_user': {
+                    'id': challenge.from_user.id,
+                    'name': challenge.from_user.full_name,
+                    'username': challenge.from_user.metadata.username if hasattr(challenge.from_user, 'metadata') else f'user_{challenge.from_user.id}'
+                },
+                'routine': {
+                    'id': challenge.routine.id,
+                    'name': challenge.routine.name,
+                },
+                'created_at': challenge.created_at,
+                'responded_at': challenge.responded_at
+            })
+        
+        return Response({
+            'success': True,
+            'challenges': challenges_data
         }, status=status.HTTP_200_OK)
         
     except Exception as e:

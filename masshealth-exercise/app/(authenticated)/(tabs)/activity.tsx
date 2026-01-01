@@ -1,4 +1,4 @@
-import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, FlatList } from 'react-native'
+import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, FlatList, Platform } from 'react-native'
 import React, { useCallback, useEffect, useState } from 'react'
 import { router } from 'expo-router'
 import ActivityIcon from '@/assets/tsxicons/activitynavbaricon'
@@ -6,6 +6,9 @@ import { ScrollView } from 'react-native'
 import privateApi from '@/api'
 import PopUp from '@/components/popUp'
 import CustomAlert from '@/components/CustomAlert'
+import { getApp } from '@react-native-firebase/app'
+import { getMessaging } from '@react-native-firebase/messaging'
+
 
 interface Friend {
   id: number;  
@@ -77,6 +80,8 @@ const activity = () => {
       );
   
       if (response.data.success) {
+        
+        
         setCustomAlertTitle('Success');
         setCustomAlertMessage(`Challenge sent to ${friend.name}!`);
         setCustomAlertVisible(true);
@@ -91,7 +96,7 @@ const activity = () => {
       setCustomAlertMessage('An error occurred while sending the challenge.');
       setCustomAlertVisible(true);
     }
-  }
+  };
   
   
   return (

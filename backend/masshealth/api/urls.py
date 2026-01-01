@@ -28,6 +28,7 @@ urlpatterns = [
     path('challenge/<int:challengeId>/decline/', views.decline_challenge, name='decline_challenge'),
     path('challenges/pending/', views.get_pending_challenges, name='get_pending_challenges'),
     path('challenge/<int:challengeId>/routine/', views.get_challenge_routine_detail, name='challenge-routine-detail'),
+    path('challenges/accepted/', views.get_accepted_challenges, name='get_accepted_challenges'),
 
 
     path('notifications/token/', views.save_notification_token, name='save-notification-token'),

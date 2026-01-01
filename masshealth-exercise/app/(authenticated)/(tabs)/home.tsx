@@ -14,6 +14,7 @@ import ChallengePopUp from '../../../components/challengePopUp';
 
 import { getApp } from '@react-native-firebase/app';
 import { getMessaging, AuthorizationStatus } from '@react-native-firebase/messaging';
+import { router } from 'expo-router';
 
 const width = Dimensions.get('window').width;
 const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -149,6 +150,7 @@ const home = () => {
     try {
       const response = await privateApi.post(`api/auth/challenge/${challengeId}/accept/`);
       console.log(`Challenge ${challengeId} accepted:`, response.data);
+      router.replace('../workout');
       
       // Remove accepted challenge from list
       setChallenges(prev => prev.filter(c => c.id !== challengeId));

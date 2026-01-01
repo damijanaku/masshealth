@@ -1,10 +1,9 @@
-import { View, Text, SafeAreaView, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, SafeAreaView, StyleSheet, FlatList } from 'react-native';
 import React, { useState, useEffect, useCallback } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import WorkoutIcon from '../../../assets/tsxicons/workoutnavbaricon';
 import SectionTitle from '../../../components/SectionTitle';
 import Routinebutton from '../../../components/RoutineButton';
-import { LegendList } from '@legendapp/list';
 import CurrentExerciseList from '../currentexercise';
 import { useRouter } from 'expo-router';
 import privateApi from '@/api';
@@ -174,76 +173,92 @@ const Workout = () => {
     setSelectedRoutine(routineName);
   };
 
-  return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView>
-        <View style={styles.sectionTitle}>
-          <WorkoutIcon color={'#6E49EB'} fill={'white'} />
-          <Text style={styles.sectionTitleText}>Workout</Text>
-        </View>
+  const renderHeader = () => (
+    <>
+      <View style={styles.sectionTitle}>
+        <WorkoutIcon color={'#6E49EB'} fill={'white'} />
+        <Text style={styles.sectionTitleText}>Workout</Text>
+      </View>
 
-        <SectionTitle textOne="Your" textTwo="Workouts" />
-        <View style={styles.buttonGroup}>
-          <ScrollView horizontal={true} showsHorizontalScrollIndicator={false}>
-            {loadingRoutines ? (
+      <SectionTitle textOne="Your" textTwo="Workouts" />
+      <View style={styles.buttonGroup}>
+        <FlatList
+          horizontal
+          data={userRoutines}
+          keyExtractor={(item) => item.id.toString()}
+          showsHorizontalScrollIndicator={false}
+          renderItem={({ item }) => (
+            <Routinebutton
+              routineName={item.name}
+              playIcon={true}
+              onPress={() => selectRoutine(item.id, item.name)}
+            />
+          )}
+          ListEmptyComponent={
+            loadingRoutines ? (
               <Text style={styles.loadingText}>Loading workouts...</Text>
-            ) : userRoutines.length > 0 ? (
-              userRoutines.map((routine) => (
-                <Routinebutton
-                  key={routine.id}
-                  routineName={routine.name}
-                  playIcon={true}
-                  onPress={() => selectRoutine(routine.id, routine.name)}
-                />
-              ))
             ) : (
               <Text style={styles.emptyText}>No workouts found</Text>
-            )}
-          </ScrollView>
-        </View>
+            )
+          }
+        />
+      </View>
 
-        {/* Shared Workouts Section */}
-        <SectionTitle textOne="Shared" textTwo="Workouts" />
-        <View style={styles.buttonGroup}>
-          <ScrollView horizontal={true} showsHorizontalScrollIndicator={false}>
-            {loadingSharedRoutines ? (
+      <SectionTitle textOne="Shared" textTwo="Workouts" />
+      <View style={styles.buttonGroup}>
+        <FlatList
+          horizontal
+          data={sharedRoutines}
+          keyExtractor={(item) => item.challenge_id.toString()}
+          showsHorizontalScrollIndicator={false}
+          renderItem={({ item }) => (
+            <View style={styles.sharedRoutineWrapper}>
+              <Routinebutton
+                routineName={item.name}
+                playIcon={true}
+                onPress={() => selectRoutine(item.id, item.name)}
+              />
+            </View>
+          )}
+          ListEmptyComponent={
+            loadingSharedRoutines ? (
               <Text style={styles.loadingText}>Loading shared workouts...</Text>
-            ) : sharedRoutines.length > 0 ? (
-              sharedRoutines.map((routine) => (
-                <View key={routine.challenge_id} style={styles.sharedRoutineWrapper}>
-                  <Routinebutton
-                    routineName={routine.name}
-                    playIcon={true}
-                    onPress={() => selectRoutine(routine.id, routine.name)}
-                  />
-                </View>
-              ))
             ) : (
               <Text style={styles.emptyText}>No shared workouts yet</Text>
-            )}
-          </ScrollView>
-        </View>
+            )
+          }
+        />
+      </View>
 
-        {selectedRoutine ? (
-          <>
-            <SectionTitle textTwo="Details" />
-            <View style={styles.routineDetailsContainer}>
-              <Text style={styles.routineDetailsText}>
-                {selectedRoutine}
-              </Text>
-            </View>
-            <CurrentExerciseList routineId={selectedRoutineId} routineName={selectedRoutine} />
-          </>
-        ) : (
-          <>
-            <SectionTitle textOne="Active" textTwo="Workout" />
-            <View style={styles.currentExerciseContainer}>
-              <Text style={styles.currentExerciseText}>Select a workout above</Text>
-            </View>
-            <CurrentExerciseList />
-          </>
-        )}
-      </ScrollView>
+      {selectedRoutine ? (
+        <>
+          <SectionTitle textTwo="Details" />
+          <View style={styles.routineDetailsContainer}>
+            <Text style={styles.routineDetailsText}>
+              {selectedRoutine}
+            </Text>
+          </View>
+        </>
+      ) : (
+        <>
+          <SectionTitle textOne="Active" textTwo="Workout" />
+          <View style={styles.currentExerciseContainer}>
+            <Text style={styles.currentExerciseText}>Select a workout above</Text>
+          </View>
+        </>
+      )}
+    </>
+  );
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <FlatList
+        data={[]} 
+        ListHeaderComponent={renderHeader}
+        ListFooterComponent={<CurrentExerciseList
+          routineId={selectedRoutineId}
+          routineName={selectedRoutine || undefined} />}
+        keyExtractor={(item, index) => index.toString()} renderItem={undefined}      />
     </SafeAreaView>
   );
 };
@@ -268,7 +283,7 @@ const styles = StyleSheet.create({
   },
   buttonGroup: {
     height: 150,
-    marginBottom: 10, 
+    marginBottom: 5, 
   },
   currentExerciseContainer: {
     borderRadius: 8,

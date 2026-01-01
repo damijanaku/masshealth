@@ -179,6 +179,12 @@ class UserMetadata(SyncToSupabaseMixin, models.Model):
     fitness_experience = models.CharField(max_length=20, choices=FITNESS_EXPERIENCE_CHOICES, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    notification_token = models.CharField(
+        max_length=255, 
+        null=True, 
+        blank=True,
+        help_text="Push notification token for mobile devices"
+    )
 
     profile_image = models.ImageField(
         upload_to=profile_image_path,
@@ -250,6 +256,24 @@ class Routine(SyncToSupabaseMixin, models.Model):
     
     def __str__(self):
         return f"{self.name} - {self.user.get_full_name()}"
+    
+    class Meta:
+        ordering = ['-created_at']
+
+class Challenge(SyncToSupabaseMixin, models.Model):
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('accepted', 'Accepted'),
+        ('completed', 'Completed'),
+        ('declined', 'Declined'),
+    ]
+
+    from_user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='challenges_sent')
+    to_user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='challenges_received')
+    routine = models.ForeignKey(Routine, on_delete=models.CASCADE)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    created_at = models.DateTimeField(auto_now_add=True)
+    responded_at = models.DateTimeField(null=True, blank=True)
     
     class Meta:
         ordering = ['-created_at']

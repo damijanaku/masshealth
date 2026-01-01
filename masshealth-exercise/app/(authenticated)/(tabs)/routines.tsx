@@ -17,6 +17,17 @@ import { useMqttContext } from '@/components/MqttProvider'
 
 import privateApi from '@/api'
 
+interface SharedRoutine {
+  id: number;
+  name: string;
+  description?: string;
+  is_public: boolean;
+  created_at: string;
+  updated_at: string;
+  challenge_id: number;
+  from_user: string;
+}
+
 interface Routine {
   id: number
   name: string
@@ -56,6 +67,8 @@ const Routines: React.FC = () => {
   const [userLocation, setUserLocation] = useState<UserLocation | null>(null)
   const [locationWatchId, setLocationWatchId] = useState<Location.LocationSubscription | null>(null)
   const [friendsLoading, setFriendsLoading] = useState(true)
+  const [sharedRoutines, setSharedRoutines] = useState<SharedRoutine[]>([]);
+  const [loadingSharedRoutines, setLoadingSharedRoutines] = useState(true);
 
 
   // Fetch friends list
@@ -76,6 +89,47 @@ const Routines: React.FC = () => {
       console.error("Error fetching friends", error);
     } finally {
       setFriendsLoading(false)
+    }
+  };
+
+  const fetchAcceptedChallenges = async () => {
+    try {
+      setLoadingSharedRoutines(true);
+      
+      // Get all accepted challenges where user is the receiver
+      const response = await privateApi.get('/api/auth/challenges/accepted/');
+      
+      if (response.data.success) {
+        // For each accepted challenge, fetch the routine details
+        const sharedRoutinesData = await Promise.all(
+          response.data.challenges.map(async (challenge: any) => {
+            try {
+              const routineResponse = await privateApi.get(
+                `/api/auth/challenge/${challenge.id}/routine/`
+              );
+              
+              if (routineResponse.data.success) {
+                return {
+                  ...routineResponse.data.routine,
+                  challenge_id: challenge.id,
+                  from_user: challenge.from_user.username
+                };
+              }
+              return null;
+            } catch (error) {
+              console.error(`Error fetching routine for challenge ${challenge.id}:`, error);
+              return null;
+            }
+          })
+        );
+        
+        // Filter out null values
+        setSharedRoutines(sharedRoutinesData.filter(r => r !== null));
+      }
+    } catch (error) {
+      console.error('Error fetching accepted challenges:', error);
+    } finally {
+      setLoadingSharedRoutines(false);
     }
   };
   
@@ -192,6 +246,7 @@ const Routines: React.FC = () => {
     React.useCallback(() => {
       fetchRoutines()
       fetchFriends()
+      fetchAcceptedChallenges()
     }, [])
   )
 
@@ -252,54 +307,93 @@ const Routines: React.FC = () => {
   }
 
   return (
-    <GestureHandlerRootView>
+    <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaView style={styles.container}>
         
         <View style={styles.sectionTitle}>
           <RoutinesIcon color={"#6E49EB"} fill={"white"} />
           <Text style={styles.sectionTitleText}>Routines</Text>
         </View>
-
-        {webViewContent && !friendsLoading ? (
-          <View style={styles.mapWrapper}>
-            <View style={styles.map}>
-              <LeafletView
-                source={{ html: webViewContent }}
-                mapCenterPosition={getMapCenter()}
-                mapMarkers={createMapMarkers()}
-                zoom={12}
-              />
-            </View>
-            <Text style={styles.locationStatus}>
-              📍 Sharing location with {friends.length} friends
-            </Text>
-          </View>
-        ) : (
-          <ActivityIndicator size="large" />
-        )}
-
-        <SectionTitle textOne='Your' textTwo='Routines' />
-
-        <View style={styles.buttonGroup}>
-          <ScrollView horizontal>
-            <CreateRoutineButton onPress={() => router.push('../createroutine')} />
-
-            {loadingRoutines ? (
-              <Text style={styles.loadingText}>Loading routines...</Text>
-            ) : userRoutines.length > 0 ? (
-              userRoutines.map((routine) => (
-                <Routinebutton
-                  key={routine.id}
-                  routineName={routine.name}
-                  onPress={() => navigateToPreview(routine.name, routine.id)}
+  
+        <ScrollView 
+          style={styles.mainScrollView}
+          showsVerticalScrollIndicator={true}
+        >
+          {webViewContent && !friendsLoading ? (
+            <View style={styles.mapWrapper}>
+              <View style={styles.map}>
+                <LeafletView
+                  source={{ html: webViewContent }}
+                  mapCenterPosition={getMapCenter()}
+                  mapMarkers={createMapMarkers()}
+                  zoom={12}
                 />
-              ))
-            ) : (
-              <RoutinePlaceholder />
-            )}
-          </ScrollView>
-        </View>
-
+              </View>
+              <Text style={styles.locationStatus}>
+                📍 Sharing location with {friends.length} friends
+              </Text>
+            </View>
+          ) : (
+            <ActivityIndicator size="large" />
+          )}
+  
+          <SectionTitle textOne='Your' textTwo='Routines' />
+  
+          <View style={styles.buttonGroup}>
+            <ScrollView 
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              nestedScrollEnabled={true}
+            >
+              <CreateRoutineButton onPress={() => router.push('../createroutine')} />
+  
+              {loadingRoutines ? (
+                <Text style={styles.loadingText}>Loading routines...</Text>
+              ) : userRoutines.length > 0 ? (
+                userRoutines.map((routine) => (
+                  <Routinebutton
+                    key={routine.id}
+                    routineName={routine.name}
+                    onPress={() => navigateToPreview(routine.name, routine.id)}
+                  />
+                ))
+              ) : (
+                <RoutinePlaceholder />
+              )}
+            </ScrollView>
+          </View>
+  
+          <SectionTitle textOne='Shared' textTwo='Routines' />
+          
+          <View style={styles.buttonGroup}>
+            <ScrollView 
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              nestedScrollEnabled={true}
+            >
+              {loadingSharedRoutines ? (
+                <Text style={styles.loadingText}>Loading shared routines...</Text>
+              ) : sharedRoutines.length > 0 ? (
+                sharedRoutines.map((routine) => (
+                  <View key={routine.challenge_id} style={styles.sharedRoutineContainer}>
+                    <Routinebutton
+                      routineName={routine.name}
+                      onPress={() => navigateToPreview(routine.name, routine.id)}
+                    />
+                    <Text style={styles.sharedByText}>
+                      Shared by @{routine.from_user}
+                    </Text>
+                  </View>
+                ))
+              ) : (
+                <Text style={styles.emptyText}>No shared routines yet. Accept a challenge to see them here!</Text>
+              )}
+            </ScrollView>
+          </View>
+  
+          <View style={{ height: 50 }} />
+        </ScrollView>
+  
       </SafeAreaView>
     </GestureHandlerRootView>
   )
@@ -310,12 +404,16 @@ const styles = StyleSheet.create({
     flex: 1,
     position: 'relative',
   },
+  mainScrollView: {
+    flex: 1,
+  },
   sectionTitle: {
     flexDirection: 'row',
     marginHorizontal: 20,
     alignItems: 'center',
     fontWeight: '700',
     justifyContent: 'space-between',
+    paddingTop: 10, 
   },
   sectionTitleText: {
     fontWeight: '700',
@@ -343,6 +441,7 @@ const styles = StyleSheet.create({
   },
   buttonGroup: {
     flexDirection: 'row',
+    marginBottom: 20, 
   },
   loadingText: {
     padding: 10,
@@ -363,6 +462,23 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#666',
     textAlign: 'center',
+  },
+  sharedRoutineContainer: {
+    marginRight: 10,
+    alignItems: 'center',
+  },
+  sharedByText: {
+    fontSize: 11,
+    color: '#6E49EB',
+    fontWeight: '500',
+    marginTop: 4,
+    textAlign: 'center',
+  },
+  emptyText: {
+    padding: 20,
+    color: '#888',
+    fontSize: 14,
+    fontStyle: 'italic',
   },
 })
 

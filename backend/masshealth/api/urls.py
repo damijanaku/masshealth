@@ -17,7 +17,17 @@ urlpatterns = [
     path('enroll/', views.enroll, name='enroll_image_for_2fa'),
     path('authenticate_2fa/', views.authenticate_2fa, name='authenticate_user_with_2fa'),
 
-    
+    path('conditions-injuries/', views.get_all_conditions, name='get_conditions_and_injuries'),
+    path('fitness-goals/', views.get_all_goals, name='get_fitness_goals'),
+    path('profile/fitness-goals/add/', views.add_fitness_goals, name='update_fitness_goals'),
+    path('profile/conditions-injuries/add/', views.add_conditions, name='update_conditions_and_injuries'),
+    path('profile/fitness-goals/', views.get_fitness_goals, name='remove_fitness_goals'),
+    path('profile/conditions-injuries/', views.get_conditions, name='remove_conditions_and_injuries'),
+    path('profile/fitness-goals/delete/', views.delete_goals, name='update_fitness_goals'),
+    path('profile/conditions-injuries/delete/', views.delete_conditions, name='update_fitness_goals'),
+
+    path('profile/recommendations/', views.generate_personalized_workout, name='get_recommendations'),
+
     path('send-friend-request/<int:userId>/', views.send_friend_request, name="send_friend_request"),
     path('accept-friend-request/<int:requestId>/', views.accept_friend_request, name="accept_friend_request"),
     path('pending-requests/', views.get_pending_requests, name="pending_requests"),

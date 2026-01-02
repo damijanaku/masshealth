@@ -1,22 +1,40 @@
 import { View, Text, StyleSheet, Pressable } from 'react-native'
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { router } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import DefButton from '@/components/DefButton'
+import privateApi from '@/api'
 
 const preferencesScreen = () => {
-  const [selectedGoals, setSelectedGoals] = useState<string[]>([])
+  const [goals, setGoals] = useState<{ id: number; label: string }[]>([])
+  const [selectedGoals, setSelectedGoals] = useState<number[]>([])
 
-  const goals = [
-    { id: 'weight-loss', label: '💪Loosing weight' },
-    { id: 'cardio', label: '👟Cardio' },
-    { id: 'maintaining', label: '🕺️Maintaining weight' },
-    { id: 'weightlifting', label: '🏋️‍♂️Weightlifting' },
-    { id: 'sixpack', label: '🍻 Getting sixpack' },
-    { id: 'active', label: '🔋Staying active' },
-  ]
+  const getGoals = async () => {
+    try {
+      const response = await privateApi.get('/api/auth/fitness-goals/');
 
-  const toggleGoal = (goalId: string) => {
+      if (response.data.success) {
+        setGoals(response.data.goals.map((goal: any) => ({
+          id: goal.id,
+          label: goal.label,
+        })));
+      }
+    } catch (error) {
+      console.error('Error fetching goals:', error);
+    }
+  }
+
+  const setMyGoals = async () => {
+    try {
+      await privateApi.post('/api/auth/profile/fitness-goals/add/', {
+        goals: selectedGoals 
+      });
+    } catch (error) {
+      console.error('Error setting goals:', error);
+    }
+  }
+
+  const toggleGoal = (goalId: number) => {
     setSelectedGoals(prev => 
       prev.includes(goalId) 
         ? prev.filter(id => id !== goalId)
@@ -24,7 +42,11 @@ const preferencesScreen = () => {
     )
   }
 
-  const isSelected = (goalId: string) => selectedGoals.includes(goalId)
+  const isSelected = (goalId: number) => selectedGoals.includes(goalId)
+
+  useEffect(() => {
+    getGoals();
+  }, [])
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
@@ -55,7 +77,10 @@ const preferencesScreen = () => {
       <View style={styles.continueButton}>
         <DefButton 
           text={"Continue"} 
-          onPress={() => router.push('/(authenticated)/injuriesEnter')}
+          onPress={async () => {
+            await setMyGoals();
+            router.push('/(authenticated)/injuriesEnter');
+          }}
         />
       </View>
     </SafeAreaView>

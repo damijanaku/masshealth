@@ -154,6 +154,26 @@ class CustomUser(AbstractUser, SyncToSupabaseMixin):
     
     def has_face_embedding(self):
         return self.embedding is not None
+    
+class ConditionOrInjury(SyncToSupabaseMixin, models.Model):
+    key = models.CharField(max_length=50, unique=True) # e.g., 'back_injury'
+    label = models.CharField(max_length=100)           # e.g., 'Back Injury'
+
+    def __str__(self):
+        return self.label
+
+    class Meta:
+        db_table = 'masshealth_condition_or_injury'
+        verbose_name = "Condition or Injury"
+        verbose_name_plural = "Conditions or Injuries"
+
+
+class FitnessGoal(SyncToSupabaseMixin, models.Model):
+    key = models.CharField(max_length=50, unique=True) # e.g., 'weight_loss'
+    label = models.CharField(max_length=100)           # e.g., 'Weight Loss'
+
+    def __str__(self):
+        return self.label
 
 
 class UserMetadata(SyncToSupabaseMixin, models.Model):
@@ -185,6 +205,20 @@ class UserMetadata(SyncToSupabaseMixin, models.Model):
         blank=True,
         help_text="Push notification token for mobile devices"
     )
+    conditions_and_injuries = models.ManyToManyField(
+        ConditionOrInjury,
+        through='UserCondition',
+        related_name='users',
+        blank=True
+    )
+
+    fitness_goals = models.ManyToManyField(
+        FitnessGoal,
+        through='UserFitnessGoal',
+        related_name='users',
+        blank=True
+    )
+
 
     profile_image = models.ImageField(
         upload_to=profile_image_path,
@@ -469,4 +503,33 @@ class RoutineWorkout(SyncToSupabaseMixin, models.Model):
                 'timer_duration': 'Timer duration is required when using timer mode'
             })
             
-            
+class UserCondition(SyncToSupabaseMixin, models.Model):
+    user_metadata = models.ForeignKey(
+        UserMetadata, 
+        on_delete=models.CASCADE, 
+        db_column='usermetadata_id'
+    )
+    condition = models.ForeignKey(
+        ConditionOrInjury, 
+        on_delete=models.CASCADE, 
+        db_column='conditionorinjury_id'
+    )
+    
+    class Meta:
+        unique_together = ('user_metadata', 'condition')
+        db_table = 'masshealth_metadata_conditions'
+
+class UserFitnessGoal(SyncToSupabaseMixin, models.Model): 
+    user_metadata = models.ForeignKey(
+        UserMetadata, 
+        on_delete=models.CASCADE, 
+        db_column='usermetadata_id'
+    ) 
+    fitness_goal = models.ForeignKey(
+        FitnessGoal, 
+        on_delete=models.CASCADE, 
+        db_column='fitnessgoal_id'
+    ) 
+    class Meta:
+        unique_together = ('user_metadata', 'fitness_goal') 
+        db_table = 'masshealth_metadata_fitness_goals'

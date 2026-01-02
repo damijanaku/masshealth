@@ -1,20 +1,40 @@
 import { View, Text, StyleSheet, Pressable } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import DefButton from '@/components/DefButton'
 import { router } from 'expo-router'
+import privateApi from '@/api'
 
 const injuriesEnter = () => {
-  const [selectedInjuries, setSelectedInjuries] = useState<string[]>([])
+  const [selectedInjuries, setSelectedInjuries] = useState<number[]>([])
+  const [injuries, setInjuries] = useState<{ id: number; label: string }[]>([])
 
-  const injuries = [
-    { id: 'neck', label: '💆Neck injury' },
-    { id: 'back', label: '🤕Back injury' },
-    { id: 'diabetes', label: '🍬Diabetis' },
-    { id: 'hypertension', label: '🩸Hypertension' },
-  ]
+  const getInjuries = async () => {
+    try {
+      const response = await privateApi.get('/api/auth/conditions-injuries/');
 
-  const toggleInjury = (injuryId: string) => {
+      if (response.data.success) {
+        setInjuries(response.data.conditions.map((condition: any) => ({
+          id: condition.id, 
+          label: condition.label,
+        })));
+      }
+    } catch (error) {
+      console.error('Error fetching injuries:', error);
+    }
+  }
+
+  const setMyInjuries = async () => {
+    try {
+      await privateApi.post('/api/auth/profile/conditions-injuries/add/', {
+        conditions: selectedInjuries 
+      });
+    } catch (error) {
+      console.error('Error setting injuries:', error);
+    }
+  }
+
+  const toggleInjury = (injuryId: number) => {
     setSelectedInjuries(prev => 
       prev.includes(injuryId) 
         ? prev.filter(id => id !== injuryId)
@@ -22,7 +42,22 @@ const injuriesEnter = () => {
     )
   }
 
-  const isSelected = (injuryId: string) => selectedInjuries.includes(injuryId)
+  const isSelected = (injuryId: number) => selectedInjuries.includes(injuryId)
+  
+  useEffect(() => {
+    getInjuries();
+  }, [])
+
+  const generateRecommendations = async () => {
+    try {
+      const response = await privateApi.post('/api/auth/profile/recommendations/');
+      if (response.data.success) {
+        console.log('Recommendations generated successfully');
+      }
+    } catch (error) {
+      console.error('Error generating recommendations:', error);
+    }
+  }
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
@@ -53,7 +88,11 @@ const injuriesEnter = () => {
       <View style={styles.continueButton}>
         <DefButton 
           text={"Continue"} 
-          onPress={() => router.push('/(authenticated)/(tabs)/home')}
+          onPress={async () => {
+            await setMyInjuries();
+            await generateRecommendations();
+            router.push('/(authenticated)/(tabs)/home');
+          }}
         />
       </View>
     </SafeAreaView>

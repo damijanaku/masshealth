@@ -97,24 +97,41 @@ export function UserProvider({ children }: UserProviderProps) {
 
   const fetchProfile = async () => {
     try {
-      console.log('Fetching data');
-
+      console.log('Fetching profile');
+  
       const response = await privateApi.get('/api/auth/profile/');
       const userData = response.data;
-
+  
       setUser({
         full_name: userData.full_name || userData.username || userData.email || 'User',
         username: userData.username || '',
         profile_image_url: userData.profile_image_url 
       });
-
+  
       console.log('Profile loaded:', userData);
+  
+      const [conditionsRes, fitnessRes] = await Promise.all([
+        privateApi.get('/api/auth/profile/conditions-injuries/'),  
+        privateApi.get('/api/auth/profile/fitness-goals/')         
+      ]);
+  
+      const conditions = conditionsRes.data.conditions || [];
+      const fitnessGoals = fitnessRes.data.goals || [];  
+  
+      // Only route to preferences if both are empty
+      if (conditions.length === 0 || fitnessGoals.length === 0) {
+        router.replace('/(authenticated)/preferencesScreen');
+      } else {
+        console.log('User already has conditions or fitness goals, no routing to preferences.');
+      }
+  
     } catch (error) {
       console.error('Profile fetch error:', error);
     } finally {
       setLoading(false); 
     }
   };
+  
 
   return (
     <UserContext.Provider value={{ user, login, logout, loading }}>

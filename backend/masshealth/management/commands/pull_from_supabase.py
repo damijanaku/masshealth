@@ -38,7 +38,11 @@ class Command(BaseCommand):
             'Routine',
             'Workout',
             'RoutineWorkout',
-            'Challenge'
+            'Challenge',
+            'FitnessGoal',
+            'ConditionOrInjury',
+            'UserCondition',
+            'UserFitnessGoal',
         ]
         
         # If specific model requested, only pull that one

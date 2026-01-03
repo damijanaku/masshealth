@@ -358,10 +358,56 @@ int HTTP_ConfigureUrl(const char *url) {
     return 1;
 }
 
-static int ESP_HTTP_Login(const char *url,
-                          const char *email,
-                          const char *password)
+static int ESP_MQTT_Connect_TLS(const char *broker, uint16_t port,
+                                 const char *clientID,
+                                 const char *username,
+                                 const char *password)
 {
+    char cmd[256];
+    int res;
+
+    USER_LOG("=== Starting MQTT TLS Connection ===");
+
+    // ONLY STEP 1: Configure everything in one command
+    USER_LOG("Configuring MQTT...");
+    snprintf(cmd, sizeof(cmd),
+             "AT+MQTTUSERCFG=0,2,\"%s\",\"%s\",\"%s\",0,0,\"\"\r\n",
+             clientID, username, password);
+    res = ESP_SendCommand(cmd, "OK", 3000);
+    if (!res) {
+        USER_LOG("MQTTUSERCFG Failed!");
+        return 0;
+    }
+    USER_LOG("Configuration OK");
+    HAL_Delay(200);
+
+
+    USER_LOG("Connecting to broker...");
+    snprintf(cmd, sizeof(cmd),
+             "AT+MQTTCONN=0,\"%s\",%d,1\r\n",
+             broker, port);
+    res = ESP_SendCommand(cmd, "OK", 15000);
+    if (!res) {
+        USER_LOG("MQTTCONN Failed!");
+        return 0;
+    }
+    HAL_GPIO_WritePin(GPIOE, LD6_Pin, GPIO_PIN_SET);
+
+    USER_LOG("MQTT TLS Connected!");
+    return 1;
+}
+
+
+static int ESP_MQTT_Publish_AT(const char *topic, const char *message, uint8_t qos) {
+	char cmd[256];
+	USER_LOG("Publishing to: %s", topic);
+	snprintf(cmd, sizeof(cmd), "AT+MQTTPUB=0,\"%s\",\"%s\",%d,0\r\n", topic, message, qos);
+	if (!ESP_SendCommand(cmd, "OK", 5000)) {
+		USER_LOG("Publish failed!");
+		return 0;
+	}
+	USER_LOG("Published successfully!");
+	return 1;
 }
 
 
@@ -404,6 +450,7 @@ int main(void)
   /* USER CODE BEGIN 2 */
   HAL_Delay(1000); // Wait for ESP to be ready
   ESP_SendCommand("ATE0\r\n", "OK", 2000);
+  ESP_SendCommand("AT+MQTTCLEAN=0\r\n", "OK", 1000);
   HAL_Delay(500);
 
   /* USER CODE END 2 */
@@ -414,6 +461,8 @@ int main(void)
     {
         /* USER CODE END WHILE */
         /* USER CODE BEGIN 3 */
+
+	  	// in this code i prepared MQTT over TLS, this is secure, we have username and password, i also have functions for MQTT over tcp - less safe
         if (ESP_SendCommand("AT\r\n", "OK", 2000))
         {
             HAL_GPIO_WritePin(GPIOE, GPIO_PIN_10, GPIO_PIN_SET);
@@ -426,43 +475,16 @@ int main(void)
                 DEBUG_LOG("WiFi connected successfully!");
 
 
-                // Now attempt MQTT connection
-                USER_LOG("Attempting MQTT connection...");
-                if (ESP_MQTT_Connect("broker.hivemq.com", 1883, "STM32_Client", NULL, NULL, 60))
+                if(ESP_MQTT_Connect_TLS("9f03cca8588b48b59bb6aad74976ac95.s1.eu.hivemq.cloud",
+                                        8883,
+                                        "masshealth_sensornum", // change this with massheslth_clientid
+                                        "username", // enter username for mqtt connection
+                                        "password")) // enter password for mqtt connection, if u have this character " in password use \\\"
                 {
-                    // MQTT connected successfully
                     //HAL_GPIO_WritePin(GPIOE, LD6_Pin, GPIO_PIN_SET);
-                    USER_LOG("MQTT connection established!");
-
-                    // Publish a message to topic "esp"
-                    if (ESP_MQTT_Publish("esp", "Hello from STM32!", 0))
-                    {
-                        USER_LOG("Published message to topic 'esp'");
-                    }
-                    else
-                    {
-                        USER_LOG("Failed to publish message");
-                    }
                 }
-                else
-                {
-                    // MQTT connection failed
-                    //HAL_GPIO_WritePin(GPIOE, LD6_Pin, GPIO_PIN_RESET);
-                    USER_LOG("MQTT connection failed!");
-                }
-
-                // testing api call
-                if (ESP_SendCommand("AT+HTTPCLIENT=2,0,\"http://192.168.1.71:8000/api/auth/routines/\",,,1\r\n", "+HTTPCLIENT", 10000))
-                {
-                    USER_LOG("HTTP GET request sent successfully!");
-
-                    // The response will be in esp_rx_buffer
-                    // You can parse the +HTTPCLIENT response here
-                    USER_LOG("Response: %s", esp_rx_buffer);
-                }
-                else
-                {
-                    USER_LOG("HTTP GET request failed!");
+                if(ESP_MQTT_Publish_AT("sensor/test", "bobi", 0)){
+                	USER_LOG("Published message to topic 'esp'");
                 }
 
 

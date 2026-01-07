@@ -7,7 +7,7 @@ import AdminDashboard from './pages/AdminDashboard';
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, user } = useAuthStore();
   
-  if (!isAuthenticated || !user?.is_admin) {
+  if (!isAuthenticated || (!user?.is_staff && !user?.is_superuser)) {
     return <Navigate to="/admin/login" replace />;
   }
   

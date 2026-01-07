@@ -1,6 +1,7 @@
 from django.urls import path
 from rest_framework_simplejwt.views import TokenRefreshView
-from . import views, admin_views
+from . import views
+from . import admin_views
 from masshealth.api.views import get_mqtt_credentials
 
 urlpatterns = [
@@ -52,11 +53,21 @@ urlpatterns = [
      path('routines/<int:routine_id>/workouts/<int:workout_order>/delete/', 
          views.remove_workout_from_routine, name='remove-workout-from-routine'),
 
-    path('api/admin/check/', admin_views.admin_check, name='admin-check'),
-    path('api/admin/list/', admin_views.list_admins, name='list-admins'),
-    path('api/admin/users/', admin_views.list_all_users, name='list-all-users'),
-    path('api/admin/create/', admin_views.create_admin, name='create-admin'),
-    path('api/admin/promote/<int:user_id>/', admin_views.promote_to_admin, name='promote-admin'),
-    path('api/admin/demote/<int:user_id>/', admin_views.demote_admin, name='demote-admin'),
-    path('api/admin/delete/<int:user_id>/', admin_views.delete_user, name='delete-user'),
+
+    # Admin endpoints
+    path('admin/check/', admin_views.admin_check, name='admin-check'),
+    path('admin/stats/', admin_views.dashboard_stats, name='dashboard-stats'),
+    path('admin/list/', admin_views.list_admins, name='list-admins'),
+    path('admin/users/', admin_views.list_all_users, name='list-all-users'),
+    path('admin/create/', admin_views.create_admin, name='create-admin'),
+    path('admin/promote/<int:user_id>/', admin_views.promote_to_admin, name='promote-admin'),
+    path('admin/demote/<int:user_id>/', admin_views.demote_admin, name='demote-admin'),
+    path('admin/delete/<int:user_id>/', admin_views.delete_user, name='delete-user'),
+    path('admin/users/<int:user_id>/', admin_views.update_user, name='update-user'),
+    path('admin/users/<int:user_id>/send-reset/', admin_views.send_password_reset, name='send-password-reset'),
+    
+    # Sound endpoints
+    path('admin/sounds/', admin_views.list_sounds, name='list-sounds'),
+    path('admin/sounds/upload/', admin_views.upload_sound, name='upload-sound'),
+    path('admin/sounds/<uuid:sound_id>/', admin_views.delete_sound, name='delete-sound'),
 ]

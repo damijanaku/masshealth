@@ -18,19 +18,20 @@ else:
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = 'django-insecure-r#2z#r=p!je230fy%go44l643-oo!63t&r38(++l8()0)1r$ni'
-
-# SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
+FRONTEND_URL = 'http://localhost:5173'
+
+os.environ['PATH'] = r'C:\msys64\mingw64\bin' + ';' + os.environ.get('PATH', '')
+MDCT_COMPRESSOR_PATH = r'C:\Users\lokna\School\MassHealth\backend\mdct_compress.exe'
 
 ALLOWED_HOSTS = [
     'localhost',
     '127.0.0.1',
     '10.0.2.2',  # Android emulator
-    '192.168.*',  # Local network range
+    '164.8.207.198',
     '192.168.1.18',
-    '192.168.1.165',
+    '10.127.59.209',
 ]
 
 # Application definition

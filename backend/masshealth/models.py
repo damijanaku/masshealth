@@ -487,4 +487,29 @@ class RoutineWorkout(SyncToSupabaseMixin, models.Model):
                 'timer_duration': 'Timer duration is required when using timer mode'
             })
             
-            
+
+def sound_file_path(instance, filename):
+    ext = filename.split('.')[-1]
+    filename = f"{uuid.uuid4()}.{ext}"
+    return f'sounds/{filename}'
+
+
+class Sound(models.Model):
+    """Sound/audio file model for workout soundbites"""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=200)
+    file = models.FileField(upload_to=sound_file_path)
+    duration = models.FloatField(default=0, help_text="Duration in seconds")
+    created_at = models.DateTimeField(auto_now_add=True)
+    uploaded_by = models.ForeignKey(
+        'CustomUser', 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        related_name='uploaded_sounds'
+    )
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return self.name

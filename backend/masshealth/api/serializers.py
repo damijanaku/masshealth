@@ -62,7 +62,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = CustomUser
-        fields = ('id', 'email', 'username', 'full_name', 'is_verified', 'date_joined', 'profile_image_url')
+        fields = ('id', 'email', 'username', 'full_name', 'is_verified', 'is_staff', 'is_superuser', 'date_joined', 'profile_image_url')
     
     def get_profile_image_url(self, obj):
         try:

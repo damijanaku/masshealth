@@ -1,12 +1,13 @@
 export interface User {
   id: number;
   email: string;
+  username: string;
   full_name: string;
-  is_admin?: boolean;
   is_verified: boolean;
-  created_at: string;
-  updated_at: string;
-  metadata?: UserMetadata;
+  is_staff: boolean;
+  is_superuser: boolean;
+  date_joined: string;
+  profile_image_url: string | null;
 }
 
 export interface UserMetadata {
@@ -25,7 +26,7 @@ export interface MQTTLocationMessage {
   senderName: string;
   latitude: number;
   longitude: number;
-  timestamp: number;
+  timestamp: string;
   accuracy?: number;
 }
 

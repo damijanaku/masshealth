@@ -10,9 +10,9 @@ echo    MassHealth Development Setup
 echo ========================================
 echo.
 echo 1. Backend Terminal
-echo 2. Frontend Terminal - Device Tunnel
-echo 3. Frontend Terminal - Emulator
-echo 4. Run MQTT Docker
+echo 2. Frontend Phone - Device Tunnel
+echo 3. Frontend Phone - Emulator
+echo 4. Frontend Web
 echo 5. Exit
 echo.
 set /p choice="Select an option (1-5): "
@@ -20,7 +20,7 @@ set /p choice="Select an option (1-5): "
 if "%choice%"=="1" goto backend
 if "%choice%"=="2" goto frontend_tunnel
 if "%choice%"=="3" goto frontend_emulator
-if "%choice%"=="4" goto mqtt_docker
+if "%choice%"=="4" goto frontend_web
 if "%choice%"=="5" goto exit
 if /i "%choice%"=="q" goto exit
 
@@ -158,34 +158,27 @@ echo.
 pause
 goto menu
 
-:mqtt_docker
+frontend_web
 echo.
-echo Starting MQTT Docker Setup...
+echo Starting Frontend Web Setup...
 echo.
-
-REM Create a temporary batch file for MQTT
-echo @echo off > temp_mqtt.bat
-echo color 0C >> temp_mqtt.bat
-echo title MQTT Docker >> temp_mqtt.bat
-echo echo [MQTT] Changing to mosquitto directory... >> temp_mqtt.bat
-echo cd extras\mosquitto >> temp_mqtt.bat
-echo echo [MQTT] Checking for data and log folders... >> temp_mqtt.bat
-echo if not exist data mkdir data >> temp_mqtt.bat
-echo if not exist log mkdir log >> temp_mqtt.bat
-echo echo [MQTT] Returning to extras directory... >> temp_mqtt.bat
-echo cd ..\ >> temp_mqtt.bat
-echo echo [MQTT] Starting Docker Compose... >> temp_mqtt.bat
-echo docker compose up -d >> temp_mqtt.bat
-echo echo. >> temp_mqtt.bat
-echo echo [MQTT] MQTT Broker is now running! >> temp_mqtt.bat
-echo echo. >> temp_mqtt.bat
-echo pause >> temp_mqtt.bat
-echo del "%%~f0" ^& exit >> temp_mqtt.bat
-
-start cmd /c temp_mqtt.bat
-
+REM Create a temporary batch file for frontend web
+echo @echo off > temp_frontend_web.bat
+echo color 0C >> temp_frontend_web.bat
+echo title Frontend - Web >> temp_frontend_web.bat
+echo echo [FRONTEND] Changing to masshealth-admin-web directory... >> temp_frontend
+echo cd masshealth-admin-web >> temp_frontend_web.bat
+echo echo [FRONTEND] Installing npm packages... >> temp_frontend_web.bat
+echo call npm install >> temp_frontend_web.bat
+echo echo [FRONTEND] Starting Vite development server... >> temp_frontend_web.b
+echo npm run dev >> temp_frontend_web.bat
+echo echo. >> temp_frontend_web.bat
+echo echo Vite server stopped or failed to start. >> temp_frontend_web.bat
+echo pause >> temp_frontend_web.bat
+echo del "%%~f0" ^& exit >> temp_frontend_web.bat
+start cmd /c temp_frontend_web.bat
 echo.
-echo MQTT Docker started in new window!
+echo Frontend web terminal opened in new window!
 echo.
 pause
 goto menu

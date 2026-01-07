@@ -20,12 +20,34 @@ urlpatterns = [
     path('authenticate_2fa/', views.authenticate_2fa, name='authenticate_user_with_2fa'),
     path('mqtt/credentials/', get_mqtt_credentials, name='mqtt-credentials'),
 
-    
+    path('conditions-injuries/', views.get_all_conditions, name='get_conditions_and_injuries'),
+    path('fitness-goals/', views.get_all_goals, name='get_fitness_goals'),
+    path('profile/fitness-goals/add/', views.add_fitness_goals, name='update_fitness_goals'),
+    path('profile/conditions-injuries/add/', views.add_conditions, name='update_conditions_and_injuries'),
+    path('profile/fitness-goals/', views.get_fitness_goals, name='remove_fitness_goals'),
+    path('profile/conditions-injuries/', views.get_conditions, name='remove_conditions_and_injuries'),
+    path('profile/fitness-goals/delete/', views.delete_goals, name='update_fitness_goals'),
+    path('profile/conditions-injuries/delete/', views.delete_conditions, name='update_fitness_goals'),
+
+    path('profile/recommendations/', views.generate_personalized_workout, name='get_recommendations'),
+
     path('send-friend-request/<int:userId>/', views.send_friend_request, name="send_friend_request"),
     path('accept-friend-request/<int:requestId>/', views.accept_friend_request, name="accept_friend_request"),
     path('pending-requests/', views.get_pending_requests, name="pending_requests"),
     path('friends-list/', views.get_friends_list, name="friends_list"),
     path('search-users/', views.search_users, name="search_users"),
+    path('challenge/<int:friendId>/<int:routineId>/', views.challenge_friend, name='challenge_friend'),
+    path('challenge/<int:challengeId>/accept/', views.accept_challenge, name='accept_challenge'),
+    path('challenge/<int:challengeId>/decline/', views.decline_challenge, name='decline_challenge'),
+    path('challenges/pending/', views.get_pending_challenges, name='get_pending_challenges'),
+    path('challenge/<int:challengeId>/routine/', views.get_challenge_routine_detail, name='challenge-routine-detail'),
+    path('challenges/accepted/', views.get_accepted_challenges, name='get_accepted_challenges'),
+
+
+    path('notifications/token/', views.save_notification_token, name='save-notification-token'),
+    path('notifications/token/update/', views.update_notification_token, name='update-notification-token'),
+    path('notifications/token/get/', views.get_notification_token, name='get-notification-token'),
+    path('notifications/token/delete/', views.delete_notification_token, name='delete-notification-token'),
     
     path('workouts/', views.WorkoutListView.as_view(), name="workout-list"), 
     path('workouts/muscle-group/<str:muscle_group_name>/', 

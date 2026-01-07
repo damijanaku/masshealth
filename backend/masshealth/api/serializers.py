@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth import authenticate
 from django.contrib.auth.password_validation import validate_password
-from ..models import CustomUser, Workout, UserMetadata, MuscleGroup, Routine, RoutineWorkout
+from ..models import ConditionOrInjury, CustomUser, FitnessGoal, Workout, UserMetadata, MuscleGroup, Routine, RoutineWorkout
 
 class UserRegistrationSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, validators=[validate_password])
@@ -206,3 +206,13 @@ class RoutineDetailSerializer(serializers.ModelSerializer):
                     total_minutes += rest_minutes
         
         return round(total_minutes, 1) if total_minutes else None
+    
+class ConditionOrInjurySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ConditionOrInjury
+        fields = ['id', 'key', 'label'] 
+
+class FitnessGoalSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = FitnessGoal
+        fields = ['id', 'key', 'label'] 

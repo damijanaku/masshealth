@@ -6,8 +6,10 @@ from dotenv import load_dotenv
 import dj_database_url
 
 # Load environment variables from .env file
+BASE_DIR = Path(__file__).resolve().parent.parent
 
-env_path = '../.env'
+# Now use absolute path for .env
+env_path = BASE_DIR / '.env'
 
 if os.path.exists(env_path):
     load_dotenv(env_path)
@@ -32,6 +34,10 @@ ALLOWED_HOSTS = [
     '164.8.207.198',
     '192.168.1.18',
     '10.127.59.209',
+    '192.168.*',  # Local network range
+    '164.8.222.74',
+    '192.168.1.71'
+
 ]
 
 # Application definition

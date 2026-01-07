@@ -1,3 +1,4 @@
+import traceback
 from rest_framework import status, generics, permissions
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
@@ -5,17 +6,24 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import login
 from django.shortcuts import get_object_or_404
-from django.db import models 
-from .serializers import (RoutineWorkoutSerializer, UserRegistrationSerializer, UserLoginSerializer, 
+from django.db import models
+from django.db import models, transaction 
+
+from masshealth.api.services.workoutrecommendation import WorkoutRecommendationEngine
+
+
+from .serializers import (ConditionOrInjurySerializer, FitnessGoalSerializer, RoutineWorkoutSerializer, UserRegistrationSerializer, UserLoginSerializer, 
                          UserProfileSerializer, UserMetadataSerializer, TwoFactorAuthSerializer,
                          MuscleGroupSerializer, WorkoutSerializer, 
                          RoutineSerializer, RoutineWorkoutCreateUpdateSerializer, RoutineDetailSerializer)
-from ..models import CustomUser, UserMetadata, FriendRequest, Workout, Routine, RoutineWorkout, MuscleGroup
+from ..models import Challenge, ConditionOrInjury, CustomUser, FitnessGoal, UserMetadata, FriendRequest, Workout, Routine, RoutineWorkout, MuscleGroup
 from .forms import ProfilePicForm
 import os
 import numpy as np
 import cv2
 from insightface.app import FaceAnalysis
+from django.utils import timezone
+
 
 class RegisterView(generics.CreateAPIView):
     queryset = CustomUser.objects.all()
@@ -425,6 +433,172 @@ def get_friends_list(request):
             'success': False,
             'error': f'An error occurred: {str(e)}'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def challenge_friend(request, friendId, routineId):
+    try:
+        from_user = request.user
+        to_user = get_object_or_404(CustomUser, id=friendId)
+        routine_id = request.data.get('routine_id', routineId)
+
+        # Check if they are friends
+        if not from_user.friends.filter(id=friendId).exists():
+            return Response({
+                'success': False,
+                'message': 'You can only challenge your friends'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Get the routine
+        routine = get_object_or_404(Routine, id=routine_id, user=request.user)
+        
+        # Check if there's already a pending challenge
+        existing_challenge = Challenge.objects.filter(
+            from_user=from_user,
+            to_user=to_user,
+            routine=routine,
+            status='pending'
+        ).exists()
+        
+        if existing_challenge:
+            return Response({
+                'success': False,
+                'message': 'You already have a pending challenge with this routine'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Create the challenge
+        challenge = Challenge.objects.create(
+            from_user=from_user,
+            to_user=to_user,
+            routine=routine,
+        )
+        
+        return Response({
+            'success': True,
+            'message': 'Challenge sent successfully',
+            'challenge_id': challenge.id
+        }, status=status.HTTP_201_CREATED)
+
+    except Exception as e:
+        return Response({
+            'success': False,
+            'error': f'An error occurred: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR) 
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def accept_challenge(request, challengeId):
+    try:
+        challenge = get_object_or_404(Challenge, id=challengeId)
+        if challenge.to_user != request.user:
+            return Response({
+                'success': False,
+                'message': 'You can only accept challenges sent to you'
+            }, status=status.HTTP_403_FORBIDDEN)
+        
+        if challenge.status != 'pending':
+            return Response({
+                'success': False,
+                'message': 'This challenge has already been responded to'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # update challenge status
+        challenge.status = 'accepted'
+        challenge.responded_at = timezone.now()
+        challenge.save()
+
+        return Response({
+            'success': True,
+            'message': 'Challenge accepted successfully',
+            'challenge': {
+                'id': challenge.id,
+                'routine_name': challenge.routine.name,
+                'from_user': challenge.from_user.full_name
+            }
+        }, status=status.HTTP_200_OK)
+    
+    except Exception as e:
+        return Response({
+            'success': False,
+            'error': f'An error occurred: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def decline_challenge(request, challengeId):
+    try:
+        challenge = get_object_or_404(Challenge, id=challengeId)
+        if challenge.to_user != request.user:
+            return Response({
+                'success': False,
+                'message': 'You can only accept challenges sent to you'
+            }, status=status.HTTP_403_FORBIDDEN)
+        
+        if challenge.status != 'pending':
+            return Response({
+                'success': False,
+                'message': 'This challenge has already been responded to'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # update challenge status
+        challenge.status = 'declined'
+        challenge.responded_at = timezone.now()
+        challenge.save()
+
+        return Response({
+            'success': True,
+            'message': 'Challenge declined successfully',
+            'challenge': {
+                'id': challenge.id,
+                'routine_name': challenge.routine.name,
+                'from_user': challenge.from_user.full_name
+            }
+        }, status=status.HTTP_200_OK)
+    
+    except Exception as e:
+        return Response({
+            'success': False,
+            'error': f'An error occurred: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def get_pending_challenges(request):
+    try:
+        pending_challenges = Challenge.objects.filter(
+            to_user=request.user,
+            status='pending'
+        )
+        
+        challenges_data = []
+        for challenge in pending_challenges:
+            challenges_data.append({
+                'id': challenge.id,
+                'from_user': {
+                    'id': challenge.from_user.id,
+                    'name': challenge.from_user.full_name,
+                    'username': challenge.from_user.metadata.username if hasattr(challenge.from_user, 'metadata') else f'user_{challenge.from_user.id}'
+                },
+                'routine': {
+                    'id': challenge.routine.id,
+                    'name': challenge.routine.name,
+                    'description': challenge.routine.description
+                },
+                'created_at': challenge.created_at
+            })
+        
+        return Response({
+            'success': True,
+            'challenges': challenges_data
+        }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        return Response({
+            'success': False,
+            'error': f'An error occurred: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
 @api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])
@@ -545,8 +719,24 @@ class RoutineDetailView(generics.RetrieveAPIView):
     serializer_class = RoutineDetailSerializer
     permission_classes = [permissions.IsAuthenticated]
 
-    def get_queryset(self):  
-        return Routine.objects.filter(user=self.request.user)
+    def get_queryset(self):
+        user = self.request.user
+        routine_id = self.kwargs.get('pk')
+        
+        # Check if user can access this routine through a challenge
+        has_challenge_access = Challenge.objects.filter(
+            routine_id=routine_id,
+            status='accepted'  # Only accepted challenges
+        ).filter(
+            models.Q(from_user=user) | models.Q(to_user=user)
+        ).exists()
+        
+        if has_challenge_access:
+            # User has access through an accepted challenge
+            return Routine.objects.filter(id=routine_id)
+        
+        # Otherwise, only show own routines
+        return Routine.objects.filter(user=user)
 
 class RoutineListView(generics.ListAPIView):
     serializer_class = RoutineSerializer

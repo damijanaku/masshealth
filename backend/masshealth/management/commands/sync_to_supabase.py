@@ -32,6 +32,11 @@ class Command(BaseCommand):
             'Routine',
             'Workout',
             'RoutineWorkout',
+            'Challenge',
+            'FitnessGoal',
+            'ConditionOrInjury',
+            'UserCondition',
+            'UserFitnessGoal',
         ]
         
         for model_name in sync_order:

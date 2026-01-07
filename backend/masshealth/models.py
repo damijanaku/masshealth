@@ -166,6 +166,26 @@ class CustomUser(AbstractUser, SyncToSupabaseMixin):
     
     def has_face_embedding(self):
         return self.embedding is not None
+    
+class ConditionOrInjury(SyncToSupabaseMixin, models.Model):
+    key = models.CharField(max_length=50, unique=True) # e.g., 'back_injury'
+    label = models.CharField(max_length=100)           # e.g., 'Back Injury'
+
+    def __str__(self):
+        return self.label
+
+    class Meta:
+        db_table = 'masshealth_condition_or_injury'
+        verbose_name = "Condition or Injury"
+        verbose_name_plural = "Conditions or Injuries"
+
+
+class FitnessGoal(SyncToSupabaseMixin, models.Model):
+    key = models.CharField(max_length=50, unique=True) # e.g., 'weight_loss'
+    label = models.CharField(max_length=100)           # e.g., 'Weight Loss'
+
+    def __str__(self):
+        return self.label
 
 
 class UserMetadata(SyncToSupabaseMixin, models.Model):
@@ -191,6 +211,26 @@ class UserMetadata(SyncToSupabaseMixin, models.Model):
     fitness_experience = models.CharField(max_length=20, choices=FITNESS_EXPERIENCE_CHOICES, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    notification_token = models.CharField(
+        max_length=255, 
+        null=True, 
+        blank=True,
+        help_text="Push notification token for mobile devices"
+    )
+    conditions_and_injuries = models.ManyToManyField(
+        ConditionOrInjury,
+        through='UserCondition',
+        related_name='users',
+        blank=True
+    )
+
+    fitness_goals = models.ManyToManyField(
+        FitnessGoal,
+        through='UserFitnessGoal',
+        related_name='users',
+        blank=True
+    )
+
 
     profile_image = models.ImageField(
         upload_to=profile_image_path,
@@ -292,6 +332,24 @@ class Routine(SyncToSupabaseMixin, models.Model):
     
     def __str__(self):
         return f"{self.name} - {self.user.get_full_name()}"
+    
+    class Meta:
+        ordering = ['-created_at']
+
+class Challenge(SyncToSupabaseMixin, models.Model):
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('accepted', 'Accepted'),
+        ('completed', 'Completed'),
+        ('declined', 'Declined'),
+    ]
+
+    from_user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='challenges_sent')
+    to_user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='challenges_received')
+    routine = models.ForeignKey(Routine, on_delete=models.CASCADE)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    created_at = models.DateTimeField(auto_now_add=True)
+    responded_at = models.DateTimeField(null=True, blank=True)
     
     class Meta:
         ordering = ['-created_at']

@@ -36,7 +36,7 @@ const Register = () => {
             await SecureStore.setItemAsync(ACCESS_TOKEN, res.data.access)
             await SecureStore.setItemAsync(REFRESH_TOKEN, res.data.refresh)
 
-            router.replace('/(authenticated)/(tabs)/home')
+            router.replace('../login')
         } catch (error: any) {
             console.log('Registration error:', error.response?.data);
             Alert.alert("Registration Failed", 

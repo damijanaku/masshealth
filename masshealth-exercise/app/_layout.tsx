@@ -8,6 +8,7 @@ import { ACCESS_TOKEN, REFRESH_TOKEN } from '@/constants';
 import { publicApi } from '../api';
 import { UserProvider } from '@/services/UserContext';
 
+
 export default function RootLayout() {
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);

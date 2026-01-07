@@ -66,7 +66,7 @@ class SyncToSupabaseMixin(models.Model):
             for field in obj_copy._meta.fields:
                 if field.name not in ['synced_at', 'sync_status']:
                     value = getattr(obj_copy, field.name)
-                    # Handle foreign keys
+                    # Handle foreign keys - save the ID, not the object
                     if field.many_to_one or field.one_to_one:
                         value = value.pk if value else None
                     obj_dict[field.name] = value
@@ -83,16 +83,28 @@ class SyncToSupabaseMixin(models.Model):
                 # Update existing record
                 self.__class__.objects.using('supabase').filter(pk=self.pk).update(**obj_dict)
             else:
-                # Create new record
-                obj_dict['id'] = self.pk
-                self.__class__.objects.using('supabase').create(**obj_dict)
-            
-            # Update sync status locally
-            self.__class__.objects.using('default').filter(pk=self.pk).update(
-                synced_at=timezone.now(),
-                sync_status='synced'
-            )
-            logger.info(f"Synced {self.__class__.__name__} {self.pk} to Supabase")
+                # For create, we need to reconstruct the object with proper foreign keys
+                create_dict = {}
+                for field in obj_copy._meta.fields:
+                    if field.name not in ['synced_at', 'sync_status']:
+                        value = getattr(obj_copy, field.name)
+                        # For foreign keys, get the related object from supabase
+                        if field.many_to_one or field.one_to_one:
+                            if value:
+                                related_model = field.related_model
+                                try:
+                                    # Get the related object from supabase database
+                                    value = related_model.objects.using('supabase').get(pk=value.pk)
+                                except:
+                                    # If related object doesn't exist in supabase, skip this record
+                                    logger.warning(f"Related object {related_model.__name__} {value.pk} not found in Supabase")
+                                    return
+                            else:
+                                value = None
+                        create_dict[field.name] = value
+                
+                create_dict['id'] = self.pk
+                self.__class__.objects.using('supabase').create(**create_dict)
             
         except Exception as e:
             # Mark as failed
@@ -269,6 +281,36 @@ class FriendRequest(SyncToSupabaseMixin, models.Model):
     to_user = models.ForeignKey(
         CustomUser, related_name="to_user", on_delete=models.CASCADE
     )
+
+class UserLocation(SyncToSupabaseMixin, models.Model):
+    """Store user location updates from MQTT for friend tracking"""
+    user = models.ForeignKey(
+        CustomUser, 
+        on_delete=models.CASCADE, 
+        related_name='locations'
+    )
+    latitude = models.FloatField()
+    longitude = models.FloatField()
+    logged_at = models.DateTimeField(auto_now_add=True)
+    
+    # Optional: Add accuracy if mobile app provides it
+    accuracy = models.FloatField(
+        null=True, 
+        blank=True,
+        help_text="Location accuracy in meters"
+    )
+    
+    class Meta:
+        ordering = ['-logged_at']
+        indexes = [
+            models.Index(fields=['user', '-logged_at']),
+            models.Index(fields=['logged_at']),  # For admin dashboard queries
+        ]
+        verbose_name = "User Location"
+        verbose_name_plural = "User Locations"
+    
+    def __str__(self):
+        return f"{self.user.full_name} - {self.logged_at.strftime('%Y-%m-%d %H:%M')}"
 
 class MuscleGroup(SyncToSupabaseMixin, models.Model):
     name = models.CharField(max_length=50, unique=True)
@@ -503,33 +545,29 @@ class RoutineWorkout(SyncToSupabaseMixin, models.Model):
                 'timer_duration': 'Timer duration is required when using timer mode'
             })
             
-class UserCondition(SyncToSupabaseMixin, models.Model):
-    user_metadata = models.ForeignKey(
-        UserMetadata, 
-        on_delete=models.CASCADE, 
-        db_column='usermetadata_id'
-    )
-    condition = models.ForeignKey(
-        ConditionOrInjury, 
-        on_delete=models.CASCADE, 
-        db_column='conditionorinjury_id'
-    )
-    
-    class Meta:
-        unique_together = ('user_metadata', 'condition')
-        db_table = 'masshealth_metadata_conditions'
 
-class UserFitnessGoal(SyncToSupabaseMixin, models.Model): 
-    user_metadata = models.ForeignKey(
-        UserMetadata, 
-        on_delete=models.CASCADE, 
-        db_column='usermetadata_id'
-    ) 
-    fitness_goal = models.ForeignKey(
-        FitnessGoal, 
-        on_delete=models.CASCADE, 
-        db_column='fitnessgoal_id'
-    ) 
+def sound_file_path(instance, filename):
+    ext = filename.split('.')[-1]
+    filename = f"{uuid.uuid4()}.{ext}"
+    return f'sounds/{filename}'
+
+
+class Sound(models.Model):
+    """Sound/audio file model for workout soundbites"""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=200)
+    file = models.FileField(upload_to=sound_file_path)
+    duration = models.FloatField(default=0, help_text="Duration in seconds")
+    created_at = models.DateTimeField(auto_now_add=True)
+    uploaded_by = models.ForeignKey(
+        'CustomUser', 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        related_name='uploaded_sounds'
+    )
+
     class Meta:
-        unique_together = ('user_metadata', 'fitness_goal') 
-        db_table = 'masshealth_metadata_fitness_goals'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return self.name

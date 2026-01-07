@@ -29,6 +29,10 @@ export interface MQTTConfig {
   userId: string;
   username: string;
   clientId: string;
+  mqttUsername?: string;
+  mqttPassword?: string;
+  useSSL?: boolean;
+  path?: string;
 }
 
 class MqttService {
@@ -61,28 +65,40 @@ class MqttService {
     return new Promise((resolve, reject) => {
       try {
         const clientId = `${this.config!.clientId}_${Date.now()}`;
+        const path = this.config!.path || "/mqtt";
+
+        console.log("Connecting to MQTT:", {
+          broker: this.config!.brokerUrl,
+          port: this.config!.brokerPort,
+          path: path,
+          useSSL: this.config!.useSSL,
+          clientId: clientId,
+        });
+
         this.client = new Client(
           this.config!.brokerUrl,
           this.config!.brokerPort,
+          path,
           clientId
         );
 
         this.client.onConnectionLost = this.onConnectionLost.bind(this);
         this.client.onMessageArrived = this.onMessageArrived.bind(this);
 
-        this.client.connect({
+        const connectOptions: any = {
           cleanSession: true,
           keepAliveInterval: 60,
-          timeout: 15,
+          timeout: 30,
+          useSSL: this.config!.useSSL ?? true,
           onSuccess: () => {
-            console.log("MQTT Connected");
+            console.log("MQTT Connected successfully");
             this.isConnecting = false;
             this.notifyConnectionListeners(true);
             this.resubscribeToTopics();
             resolve();
           },
-          onFailure: (err) => {
-            console.error("MQTT connect error:", err);
+          onFailure: (err: any) => {
+            console.error("MQTT connect error:", err.errorMessage || err);
             this.isConnecting = false;
             this.notifyConnectionListeners(false);
             setTimeout(() => {
@@ -90,7 +106,14 @@ class MqttService {
             }, this.reconnectInterval);
             reject(err);
           },
-        });
+        };
+
+        if (this.config!.mqttUsername && this.config!.mqttPassword) {
+          connectOptions.userName = this.config!.mqttUsername;
+          connectOptions.password = this.config!.mqttPassword;
+        }
+
+        this.client.connect(connectOptions);
       } catch (err) {
         console.error("Connect exception:", err);
         this.isConnecting = false;
@@ -114,13 +137,12 @@ class MqttService {
     try {
       const topic = message.destinationName;
       const payload = JSON.parse(message.payloadString);
-      
-      if (topic.includes('/location')) {
+
+      if (topic.includes("/location")) {
         const locationMessage: LocationMessage = payload;
         console.log("Location received:", locationMessage);
-        console.log(" Calling", this.locationCallbacks.length, "location listeners");
         this.locationCallbacks.forEach((cb) => cb(locationMessage));
-      } else if (topic.includes('/message')) {
+      } else if (topic.includes("/message")) {
         const mqttMessage: MQTTMessage = payload;
         console.log("Message received:", mqttMessage);
         this.messageCallbacks.forEach((cb) => cb(mqttMessage));
@@ -130,7 +152,11 @@ class MqttService {
     }
   }
 
-  async publishLocation(latitude: number, longitude: number, accuracy?: number): Promise<void> {
+  async publishLocation(
+    latitude: number,
+    longitude: number,
+    accuracy?: number
+  ): Promise<void> {
     if (!this.client?.isConnected() || !this.config)
       throw new Error("MQTT not connected");
 
@@ -171,7 +197,6 @@ class MqttService {
       const topic = `user/${friend.id}/location`;
       this.client.unsubscribe(topic);
       this.subscribedTopics.delete(topic);
-      console.log(`Unsubscribed from ${friend.username}'s location: ${topic}`);
     }
   }
 
@@ -181,7 +206,6 @@ class MqttService {
     const topic = `user/${friendId}/location`;
     this.client.subscribe(topic, { qos: 1 });
     this.subscribedTopics.add(topic);
-    console.log(`Subscribed to location: ${topic}`);
   }
 
   async unsubscribeFromFriendLocation(friendId: string): Promise<void> {
@@ -190,7 +214,6 @@ class MqttService {
     const topic = `user/${friendId}/location`;
     this.client.unsubscribe(topic);
     this.subscribedTopics.delete(topic);
-    console.log(`Unsubscribed from location: ${topic}`);
   }
 
   async subscribeToFriend(friendId: string): Promise<void> {
@@ -199,7 +222,6 @@ class MqttService {
     const topic = `user/${friendId}/message`;
     this.client.subscribe(topic, { qos: 1 });
     this.subscribedTopics.add(topic);
-    console.log(`Subscribed to ${topic}`);
   }
 
   async unsubscribeFromFriend(friendId: string): Promise<void> {
@@ -208,13 +230,11 @@ class MqttService {
     const topic = `user/${friendId}/message`;
     this.client.unsubscribe(topic);
     this.subscribedTopics.delete(topic);
-    console.log(`Unsubscribed from ${topic}`);
   }
 
   private async resubscribeToTopics(): Promise<void> {
     for (const topic of this.subscribedTopics) {
       this.client?.subscribe(topic, { qos: 1 });
-      console.log(`Re-subscribed to ${topic}`);
     }
   }
 
@@ -236,60 +256,51 @@ class MqttService {
     mqttMsg.qos = 1;
 
     this.client.send(mqttMsg);
-    console.log("Sent:", msg);
   }
 
   addLocationListener(cb: (location: LocationMessage) => void) {
-    console.log('listen')
     this.locationCallbacks.push(cb);
   }
-  
+
   removeLocationListener(cb: (location: LocationMessage) => void) {
     this.locationCallbacks = this.locationCallbacks.filter((c) => c !== cb);
   }
-  
 
-  // Message listeners 
   addMessageListener(cb: (msg: MQTTMessage) => void) {
     this.messageCallbacks.push(cb);
   }
-  
+
   removeMessageListener(cb: (msg: MQTTMessage) => void) {
     this.messageCallbacks = this.messageCallbacks.filter((c) => c !== cb);
   }
-  
+
   addConnectionListener(cb: (status: boolean) => void) {
     this.connectionCallbacks.push(cb);
   }
-  
+
   removeConnectionListener(cb: (status: boolean) => void) {
     this.connectionCallbacks = this.connectionCallbacks.filter((c) => c !== cb);
   }
-  
+
   private notifyConnectionListeners(status: boolean) {
     this.connectionCallbacks.forEach((cb) => cb(status));
   }
 
-
   isConnected(): boolean {
     return this.client?.isConnected() ?? false;
   }
-  
+
   async disconnect(): Promise<void> {
-    console.log(" Disconnecting...");
     this.shouldReconnect = false;
     this.client?.disconnect();
     this.notifyConnectionListeners(false);
   }
-  
+
   async forceReconnect(): Promise<void> {
-    console.log("Force reconnect");
     this.disconnect();
     this.shouldReconnect = true;
     setTimeout(() => this.connect(), 1000);
   }
-  
 }
 
 export const mqttService = new MqttService();
-

@@ -54,6 +54,13 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "mqttBroker": "process.env.MQTT_BROKER",
+      "mqttPort": "process.env.MQTT_PORT",
+      "mqttUsername": "process.env.MQTT_USERNAME",
+      "mqttPassword": "process.env.MQTT_PASSWORD",
+      "mqttUseSSL": "process.env.MQTT_USE_SSL"
     }
   }
 }

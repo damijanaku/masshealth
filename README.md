@@ -43,58 +43,12 @@ TBA (hopefully only phone)
 2. **Access the app through setup.bat**
    Click twice on setup.bat to run it, read the screen instructions to run the app, don't forget to open MQTT explorer and connect on localhost as 'host'
 
-## Project history
+3. **Checkout the website?**
 
-Project history from the year 2025 to 2026
+   ```bash
+   cd masshealth-admin-web
+   npm i
+   npm run dev
+   ```
 
-### Phase 1: System Setup & Infrastructure
-
-- Jira task management
-- GitHub repository setup
-- React application foundation
-- Supabase backend with Docker
-- Technical documentation
-
-### Phase 2: Feature Development
-
-- Core application logic
-- Web scraper for exercise data
-- Mobile-responsive UI
-- Two-factor authentication
-- GPS integration with MQTT protocol
-
-### Phase 3: Porting and rescoping
-
-- Reimplement app
-- Implement MQTT through HiveMQ
-- Database in the cloud with Supabase and Django
-- Implementing admin panel in Varcel
-
-## 🧩 Use Cases
-
-- **Fitness Improvement** - Get a personalized program based on your current fitness level
-- **Specialized Training** - Explore specific workout types (calisthenics, HIIT, yoga)
-- **Adapted Exercise** - Safe routines for users with health limitations
-- **Custom Workouts** - Create your own exercise routines from our database
-- **Running Progress** - Track your routes, pace, time, and calories burned
-
-## 🎨 Design
-
-MassHealth features a modern, minimalist design with:
-
-- A color scheme combining purple (symbolizing strength and balance) and green (representing health and vitality)
-- Clean lines and interactive animations (Inspired by fitness apps and duolingo)
-- Light mode with dark mode option
-- Tag-based filtering system for exercises
-
-## 🛠️ Tech Stack
-
-- **Frontend**: React
-- **Backend**: Supabase
-- **Authentication**: SSO (Google, Apple, Microsoft) with Face Recognition option
-- **Containerization**: Docker
-- **Task Management**: Jira
-- **Version Control**: GitHub
-- **Development Environment**: Visual Studio Code
-- **Testing**: Jest, Cypress
-- **Monitoring**: Sentry/LogRocket
+(If you don't have an admin, initialize on in django with `python manage.py create_admin --email=admin@example.com --password=adminadmin --username=admin`)

@@ -20,19 +20,21 @@ else:
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = 'django-insecure-r#2z#r=p!je230fy%go44l643-oo!63t&r38(++l8()0)1r$ni'
-
-# SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
+FRONTEND_URL = 'http://localhost:5173'
+
+os.environ['PATH'] = r'C:\msys64\mingw64\bin' + ';' + os.environ.get('PATH', '')
+MDCT_COMPRESSOR_PATH = r'C:\Users\lokna\School\MassHealth\backend\mdct_compress.exe'
 
 ALLOWED_HOSTS = [
     'localhost',
     '127.0.0.1',
     '10.0.2.2',  # Android emulator
-    '192.168.*',  # Local network range
+    '164.8.207.198',
     '192.168.1.18',
-    '10.255.159.209',
+    '10.127.59.209',
+    '192.168.*',  # Local network range
     '164.8.222.74',
     '192.168.1.71'
 
@@ -97,6 +99,22 @@ DATABASES = {
     'supabase': dj_database_url.parse(os.getenv('SUPABASE_CONNECTION_STRING'))
 }
 
+# MQTT Configuration (add debug prints)
+MQTT_BROKER = os.getenv('MQTT_BROKER')
+MQTT_USERNAME = os.getenv('MQTT_USERNAME')
+MQTT_PASSWORD = os.getenv('MQTT_PASSWORD')
+
+MQTT_CONFIG = {
+    'broker': MQTT_BROKER,
+    'port': int(os.getenv('MQTT_PORT', 8883)),
+    'websocket_port': int(os.getenv('MQTT_WEBSOCKET_PORT', 8884)),
+    'username': MQTT_USERNAME,
+    'password': MQTT_PASSWORD,
+    'use_tls': os.getenv('MQTT_USE_TLS', 'True') == 'True',
+    'keepalive': 60,
+    'client_id': 'django_masshealth_backend'
+}
+
 # Database router
 DATABASE_ROUTERS = ['masshealth.routers.SupabaseRouter']
 
@@ -148,7 +166,6 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:19006",     # Expo web
     "exp://localhost:19000",      # Expo client
     "exp://192.168.1.18:19000",
-    "exp://164.8.222.74:19000"
 ]
 
 # For development, you might want to allow all origins (NOT for production)

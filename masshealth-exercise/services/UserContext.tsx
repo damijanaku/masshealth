@@ -118,11 +118,12 @@ export function UserProvider({ children }: UserProviderProps) {
       const conditions = conditionsRes.data.conditions || [];
       const fitnessGoals = fitnessRes.data.goals || [];  
   
-      // Only route to preferences if both are empty
-      if (conditions.length === 0 || fitnessGoals.length === 0) {
-        router.replace('/(authenticated)/preferencesScreen');
+      if (conditions.length > 0 && fitnessGoals.length > 0) {
+        console.log('User has completed setup, routing to main app');
+        router.replace('/(authenticated)/(tabs)/home');  
       } else {
-        console.log('User already has conditions or fitness goals, no routing to preferences.');
+        console.log('User needs to complete preferences');
+        router.replace('/(authenticated)/preferencesScreen');
       }
   
     } catch (error) {

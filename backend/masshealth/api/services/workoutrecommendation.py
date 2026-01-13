@@ -72,6 +72,309 @@ class WorkoutRecommendationEngine:
             'intensity_cap': 'medium',
             'include_warmup': True,
             'longer_rest': True
+        },
+        
+        # Joint injuries
+        'knee_injury': {
+            'avoid_muscle_groups': ['quads', 'hamstrings'],
+            'avoid_exercises': [
+                'squat', 'lunge', 'leg_press', 'leg_extension', 
+                'leg_curl', 'jump', 'box_jump', 'running'
+            ],
+            'preferred_equipment': ['machine', 'cable', 'bodyweight'],
+            'modifications': 'low_impact'
+        },
+        'shoulder_injury': {
+            'avoid_muscle_groups': ['shoulders', 'traps'],
+            'avoid_exercises': [
+                'overhead_press', 'military_press', 'lateral_raise',
+                'upright_row', 'bench_press', 'dips', 'pull_up'
+            ],
+            'preferred_equipment': ['cable', 'machine', 'light_dumbbell'],
+            'modifications': 'limited_range'
+        },
+        'ankle_injury': {
+            'avoid_muscle_groups': ['calves'],
+            'avoid_exercises': [
+                'running', 'jump', 'box_jump', 'calf_raise',
+                'jumping_jack', 'burpee', 'lunge'
+            ],
+            'preferred_equipment': ['machine', 'seated'],
+            'modifications': 'no_impact'
+        },
+        'wrist_injury': {
+            'avoid_muscle_groups': ['forearms'],
+            'avoid_exercises': [
+                'push_up', 'plank', 'bench_press', 'overhead_press',
+                'front_raise', 'burpee'
+            ],
+            'preferred_equipment': ['machine', 'cable', 'straps'],
+            'modifications': 'wrist_support'
+        },
+        'elbow_injury': {
+            'avoid_muscle_groups': ['biceps', 'triceps', 'forearms'],
+            'avoid_exercises': [
+                'curl', 'tricep_extension', 'dips', 'close_grip_press',
+                'overhead_press', 'pull_up'
+            ],
+            'preferred_equipment': ['machine', 'cable'],
+            'modifications': 'limited_range'
+        },
+        'hip_injury': {
+            'avoid_muscle_groups': ['glutes', 'hip_flexors'],
+            'avoid_exercises': [
+                'squat', 'deadlift', 'lunge', 'leg_press',
+                'hip_thrust', 'running'
+            ],
+            'preferred_equipment': ['machine', 'cable', 'seated'],
+            'modifications': 'limited_range'
+        },
+        
+        # Chronic conditions
+        'arthritis': {
+            'avoid_exercises': ['heavy_compound', 'high_impact'],
+            'preferred_types': ['strength', 'stretching'],
+            'preferred_equipment': ['machine', 'cable', 'resistance_band'],
+            'intensity_cap': 'low',
+            'include_warmup': True,
+            'longer_rest': True,
+            'modifications': 'joint_friendly'
+        },
+        'asthma': {
+            'preferred_types': ['strength', 'low_intensity_cardio'],
+            'intensity_cap': 'medium',
+            'include_warmup': True,
+            'longer_rest': True,
+            'modifications': 'pace_controlled'
+        },
+        'heart_condition': {
+            'avoid_exercises': ['heavy_compound', 'max_effort', 'sprint'],
+            'preferred_types': ['conditioning', 'light_strength'],
+            'intensity_cap': 'low',
+            'include_warmup': True,
+            'longer_rest': True,
+            'modifications': 'heart_rate_monitored'
+        },
+        'osteoporosis': {
+            'avoid_exercises': [
+                'heavy_deadlift', 'heavy_squat', 'high_impact',
+                'jump', 'twisting_movements'
+            ],
+            'preferred_types': ['strength', 'balance'],
+            'preferred_equipment': ['machine', 'bodyweight', 'light_weight'],
+            'intensity_cap': 'medium',
+            'modifications': 'bone_safe'
+        },
+        'obesity': {
+            'avoid_exercises': ['high_impact', 'jump'],
+            'preferred_types': ['conditioning', 'strength', 'low_impact_cardio'],
+            'preferred_equipment': ['machine', 'cable', 'seated'],
+            'intensity_cap': 'medium',
+            'include_warmup': True,
+            'modifications': 'joint_protective'
+        },
+        
+        # Pregnancy and postpartum
+        'pregnancy': {
+            'avoid_muscle_groups': ['abs'],
+            'avoid_exercises': [
+                'crunch', 'sit_up', 'lying_exercises', 'twist',
+                'heavy_compound', 'jump', 'high_impact'
+            ],
+            'preferred_types': ['prenatal', 'low_impact'],
+            'preferred_equipment': ['bodyweight', 'light_weight', 'resistance_band'],
+            'intensity_cap': 'low',
+            'include_warmup': True,
+            'modifications': 'pregnancy_safe'
+        },
+        'postpartum': {
+            'avoid_exercises': ['heavy_compound', 'high_impact'],
+            'preferred_types': ['recovery', 'pelvic_floor', 'light_strength'],
+            'preferred_equipment': ['bodyweight', 'light_weight', 'resistance_band'],
+            'intensity_cap': 'low',
+            'include_warmup': True,
+            'modifications': 'gradual_progression'
+        },
+        
+        # Spinal conditions
+        'herniated_disc': {
+            'avoid_muscle_groups': ['lower_back'],
+            'avoid_exercises': [
+                'deadlift', 'squat', 'bent_over_row', 'good_morning',
+                'overhead_press', 'sit_up', 'twist'
+            ],
+            'preferred_equipment': ['machine', 'cable', 'supported'],
+            'intensity_cap': 'low',
+            'include_warmup': True,
+            'modifications': 'spine_neutral'
+        },
+        'sciatica': {
+            'avoid_muscle_groups': ['lower_back', 'hamstrings'],
+            'avoid_exercises': [
+                'deadlift', 'good_morning', 'leg_curl', 'sit_up',
+                'forward_fold', 'twist'
+            ],
+            'preferred_equipment': ['machine', 'cable'],
+            'intensity_cap': 'low',
+            'include_warmup': True,
+            'modifications': 'nerve_safe'
+        },
+        'spinal_cord_injury': {
+            'avoid_exercises': ['varies_by_injury_level'],
+            'preferred_types': ['adapted', 'functional', 'range_of_motion'],
+            'preferred_equipment': ['machine', 'cable', 'adaptive'],
+            'intensity_cap': 'medium',
+            'include_warmup': True,
+            'modifications': 'injury_level_specific'
+        },
+        
+        # Foot conditions
+        'plantar_fasciitis': {
+            'avoid_muscle_groups': ['calves'],
+            'avoid_exercises': [
+                'running', 'jump', 'box_jump', 'calf_raise',
+                'lunge', 'burpee'
+            ],
+            'preferred_equipment': ['seated', 'machine', 'low_impact'],
+            'modifications': 'foot_support'
+        },
+        
+        # Wheelchair and mobility conditions
+        'wheelchair_user': {
+            'avoid_muscle_groups': ['legs', 'quads', 'hamstrings', 'calves', 'glutes'],
+            'avoid_exercises': [
+                'squat', 'lunge', 'deadlift', 'running', 'jump',
+                'leg_press', 'leg_curl', 'leg_extension', 'calf_raise'
+            ],
+            'preferred_types': ['upper_body_strength', 'seated', 'wheelchair_adapted'],
+            'preferred_equipment': ['dumbbell', 'cable', 'machine', 'resistance_band'],
+            'modifications': 'seated_only'
+        },
+        'paraplegic': {
+            'avoid_muscle_groups': ['legs', 'quads', 'hamstrings', 'calves', 'glutes', 'hip_flexors'],
+            'avoid_exercises': [
+                'squat', 'lunge', 'deadlift', 'running', 'jump',
+                'leg_press', 'leg_curl', 'leg_extension', 'standing_exercises'
+            ],
+            'preferred_types': ['upper_body_strength', 'seated', 'core_adapted'],
+            'preferred_equipment': ['dumbbell', 'cable', 'machine', 'resistance_band'],
+            'modifications': 'upper_body_focus'
+        },
+        'quadriplegic': {
+            'avoid_muscle_groups': ['legs', 'arms', 'grip_intensive'],
+            'avoid_exercises': [
+                'all_standing', 'all_leg_exercises', 'pull_up', 'row',
+                'curl', 'tricep_extension'
+            ],
+            'preferred_types': ['adaptive', 'assisted', 'range_of_motion'],
+            'preferred_equipment': ['machine', 'assisted', 'straps'],
+            'intensity_cap': 'low',
+            'modifications': 'highly_adaptive'
+        },
+        'limited_mobility': {
+            'avoid_exercises': ['high_impact', 'complex_movements', 'fast_pace'],
+            'preferred_types': ['strength', 'stretching', 'low_impact'],
+            'preferred_equipment': ['machine', 'cable', 'seated', 'supported'],
+            'intensity_cap': 'low',
+            'include_warmup': True,
+            'modifications': 'slow_controlled'
+        },
+        
+        # Neurological conditions
+        'cerebral_palsy': {
+            'avoid_exercises': ['high_coordination', 'fast_movements', 'complex_patterns'],
+            'preferred_types': ['strength', 'flexibility', 'balance'],
+            'preferred_equipment': ['machine', 'cable', 'supported', 'straps'],
+            'intensity_cap': 'medium',
+            'include_warmup': True,
+            'modifications': 'coordination_adapted'
+        },
+        'muscular_dystrophy': {
+            'avoid_exercises': ['heavy_resistance', 'eccentric_focus', 'high_volume'],
+            'preferred_types': ['light_strength', 'range_of_motion', 'flexibility'],
+            'preferred_equipment': ['light_weight', 'resistance_band', 'machine'],
+            'intensity_cap': 'low',
+            'include_warmup': True,
+            'longer_rest': True,
+            'modifications': 'energy_conservation'
+        },
+        'multiple_sclerosis': {
+            'avoid_exercises': ['overheating_risk', 'high_intensity', 'exhaustion_inducing'],
+            'preferred_types': ['strength', 'balance', 'flexibility'],
+            'preferred_equipment': ['machine', 'cable', 'supported'],
+            'intensity_cap': 'medium',
+            'include_warmup': True,
+            'longer_rest': True,
+            'modifications': 'fatigue_managed'
+        },
+        'parkinsons': {
+            'avoid_exercises': ['requires_fine_motor', 'fast_movements'],
+            'preferred_types': ['strength', 'balance', 'functional'],
+            'preferred_equipment': ['machine', 'cable', 'supported'],
+            'intensity_cap': 'medium',
+            'include_warmup': True,
+            'modifications': 'tremor_friendly'
+        },
+        
+        # Limb differences - Upper body
+        'missing_arm': {
+            'avoid_muscle_groups': ['biceps', 'triceps', 'forearms', 'shoulders'],
+            'avoid_exercises': [
+                'pull_up', 'row', 'curl', 'tricep_extension',
+                'bench_press', 'overhead_press', 'push_up'
+            ],
+            'preferred_types': ['unilateral', 'single_arm', 'leg_focus'],
+            'preferred_equipment': ['dumbbell', 'cable', 'machine'],
+            'modifications': 'single_side'
+        },
+        'amputee_below_elbow': {
+            'avoid_exercises': [
+                'curl', 'wrist_curl', 'grip_intensive', 'pull_up'
+            ],
+            'preferred_types': ['adapted_strength', 'unilateral'],
+            'preferred_equipment': ['machine', 'cable', 'straps', 'prosthetic_friendly'],
+            'modifications': 'grip_adaptation'
+        },
+        'amputee_above_elbow': {
+            'avoid_muscle_groups': ['biceps', 'triceps', 'forearms'],
+            'avoid_exercises': [
+                'curl', 'tricep_extension', 'pull_up', 'row',
+                'overhead_press', 'bench_press'
+            ],
+            'preferred_types': ['unilateral', 'adapted_strength'],
+            'preferred_equipment': ['machine', 'cable', 'prosthetic_friendly'],
+            'modifications': 'single_arm_focus'
+        },
+        
+        # Limb differences - Lower body
+        'missing_leg': {
+            'avoid_muscle_groups': ['quads', 'hamstrings', 'calves', 'glutes'],
+            'avoid_exercises': [
+                'squat', 'lunge', 'deadlift', 'running', 'jump',
+                'leg_press', 'leg_curl', 'leg_extension', 'bilateral_leg'
+            ],
+            'preferred_types': ['upper_body_strength', 'unilateral', 'balance'],
+            'preferred_equipment': ['dumbbell', 'cable', 'machine', 'prosthetic_friendly'],
+            'modifications': 'single_leg_adapted'
+        },
+        'amputee_below_knee': {
+            'avoid_exercises': [
+                'running', 'jump', 'box_jump', 'calf_raise',
+                'lunge', 'high_impact'
+            ],
+            'preferred_types': ['strength', 'low_impact', 'prosthetic_adapted'],
+            'preferred_equipment': ['machine', 'seated', 'supported'],
+            'modifications': 'prosthetic_compatible'
+        },
+        'amputee_above_knee': {
+            'avoid_muscle_groups': ['quads', 'hamstrings'],
+            'avoid_exercises': [
+                'squat', 'lunge', 'leg_press', 'running', 'jump',
+                'leg_extension', 'leg_curl', 'high_impact'
+            ],
+            'preferred_types': ['upper_body_strength', 'seated', 'unilateral'],
+            'preferred_equipment': ['machine', 'cable', 'seated'],
+            'modifications': 'prosthetic_adapted'
         }
     }
     
@@ -295,7 +598,12 @@ class WorkoutRecommendationEngine:
     
     def _should_include_warmup(self) -> bool:
         """Determine if warmup exercises should be included"""
-        warmup_conditions = ['diabetes', 'hypertension', 'back_injury', 'neck_injury']
+        warmup_conditions = [
+            'diabetes', 'hypertension', 'back_injury', 'neck_injury',
+            'arthritis', 'heart_condition', 'asthma', 'limited_mobility',
+            'cerebral_palsy', 'muscular_dystrophy', 'multiple_sclerosis',
+            'parkinsons', 'spinal_cord_injury', 'herniated_disc', 'sciatica'
+        ]
         return any(cond in self.conditions for cond in warmup_conditions)
     
     def _get_warmup_exercise(self, workouts: List[Dict]) -> Dict:
@@ -409,8 +717,12 @@ class WorkoutRecommendationEngine:
         
         rest = base_rest.get(self.experience_level, 60)
         
-        # Increase rest for users with hypertension
-        if 'hypertension' in self.conditions:
+        # Increase rest for users with hypertension or other conditions requiring longer rest
+        conditions_needing_more_rest = [
+            'hypertension', 'heart_condition', 'arthritis', 
+            'muscular_dystrophy', 'multiple_sclerosis'
+        ]
+        if any(cond in self.conditions for cond in conditions_needing_more_rest):
             rest += 30
             
         # Decrease rest for cardio-focused goals
@@ -422,7 +734,18 @@ class WorkoutRecommendationEngine:
 
 def generate_user_routines(workouts_json: List[Dict], user_goals: List[str], 
                           user_conditions: List[str], experience_level: str = 'beginner') -> List[Dict]:
-
+    """
+    Generate personalized workout routines for a user
+    
+    Args:
+        workouts_json: List of available workouts
+        user_goals: List of user's fitness goals
+        user_conditions: List of user's health conditions/injuries
+        experience_level: User's experience level (beginner, intermediate, advanced, expert)
+    
+    Returns:
+        List of generated workout routines
+    """
     user_profile = {
         'goals': user_goals,
         'conditions': user_conditions,
@@ -433,4 +756,3 @@ def generate_user_routines(workouts_json: List[Dict], user_goals: List[str],
     routines = engine.generate_routines(num_routines=3, workouts_per_routine=5)
     
     return routines
-

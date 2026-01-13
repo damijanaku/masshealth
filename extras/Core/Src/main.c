@@ -468,7 +468,7 @@ int main(void)
             HAL_GPIO_WritePin(GPIOE, GPIO_PIN_10, GPIO_PIN_SET);
 
             // Connect to WiFi
-            if (ESP_SendCommand("AT+CWJAP=\"username\",\"password\"\r\n", "OK", 15000))
+            if (ESP_SendCommand("AT+CWJAP=\"Hola\",\"69420112\"\r\n", "OK", 15000))
             {
                 // WiFi connected successfully
                 HAL_GPIO_WritePin(GPIOE, GPIO_PIN_14, GPIO_PIN_SET);

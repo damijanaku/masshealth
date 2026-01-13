@@ -8,6 +8,9 @@ from django.contrib.auth import login
 from django.shortcuts import get_object_or_404
 from django.db import models
 from django.db import models, transaction 
+from datetime import datetime, timedelta
+import jwt
+from django.conf import settings
 
 from masshealth.api.services.workoutrecommendation import WorkoutRecommendationEngine
 
@@ -976,6 +979,598 @@ def get_workout_modes(request):
             for mode in RoutineWorkout.WORKOUT_MODES
         ]
     })
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def save_notification_token(request):
+    try:
+        token = request.data.get('token')
+        
+        if not token:
+            return Response({
+                'success': False,
+                'message': 'Token is required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Get or create user metadata
+        metadata, created = UserMetadata.objects.get_or_create(
+            user=request.user,
+            defaults={'username': f'user_{request.user.id}'}
+        )
+        
+        # Update the token
+        metadata.notification_token = token
+        metadata.save()
+        
+        return Response({
+            'success': True,
+            'message': 'Notification token saved successfully',
+            'token': token
+        }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        return Response({
+            'success': False,
+            'error': f'An error occurred: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+@api_view(['PUT'])
+@permission_classes([permissions.IsAuthenticated])
+def update_notification_token(request):
+
+    try:
+        token = request.data.get('token')
+        
+        if not token:
+            return Response({
+                'success': False,
+                'message': 'Token is required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        metadata = get_object_or_404(UserMetadata, user=request.user)
+        
+        old_token = metadata.notification_token 
+        metadata.notification_token = token
+        metadata.save()
+        
+        return Response({
+            'success': True,
+            'message': 'Notification token updated successfully',
+            'old_token': old_token,
+            'new_token': token
+        }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        return Response({
+            'success': False,
+            'error': f'An error occurred: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def get_notification_token(request):
+    try:
+        metadata, created = UserMetadata.objects.get_or_create(
+            user=request.user,
+            defaults={'username': f'user_{request.user.id}'}
+        )
+        
+        return Response({
+            'success': True,
+            'token': metadata.notification_token,
+            'has_token': metadata.notification_token is not None
+        }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        return Response({
+            'success': False,
+            'error': f'An error occurred: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['DELETE'])
+@permission_classes([permissions.IsAuthenticated])
+def delete_notification_token(request):
+    try:
+        metadata = get_object_or_404(UserMetadata, user=request.user)
+        
+        if not metadata.notification_token:
+            return Response({
+                'success': False,
+                'message': 'No notification token found'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        metadata.notification_token = None
+        metadata.save()
+        
+        return Response({
+            'success': True,
+            'message': 'Notification token removed successfully'
+        }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        return Response({
+            'success': False,
+            'error': f'An error occurred: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def get_challenge_routine_detail(request, challengeId):
+    try:
+        # Get the challenge - user must be either sender or receiver
+        challenge = get_object_or_404(
+            Challenge, 
+            id=challengeId
+        )
+        
+        # Verify user is part of this challenge
+        if challenge.from_user != request.user and challenge.to_user != request.user:
+            return Response({
+                'success': False,
+                'error': 'You do not have permission to view this challenge'
+            }, status=status.HTTP_403_FORBIDDEN)
+        
+        # Get the routine from the challenge
+        routine = challenge.routine
+        
+        # Serialize the routine with full details
+        serializer = RoutineDetailSerializer(routine)
+        
+        return Response({
+            'success': True,
+            'routine': serializer.data,
+            'challenge_info': {
+                'id': challenge.id,
+                'status': challenge.status,
+                'from_user': challenge.from_user.full_name,
+                'to_user': challenge.to_user.full_name,
+                'created_at': challenge.created_at
+            }
+        }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        return Response({
+            'success': False,
+            'error': f'An error occurred: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def get_accepted_challenges(request):
+    try:
+        accepted_challenges = Challenge.objects.filter(
+            to_user=request.user,
+            status='accepted'
+        )
+        
+        challenges_data = []
+        for challenge in accepted_challenges:
+            challenges_data.append({
+                'id': challenge.id,
+                'from_user': {
+                    'id': challenge.from_user.id,
+                    'name': challenge.from_user.full_name,
+                    'username': challenge.from_user.metadata.username if hasattr(challenge.from_user, 'metadata') else f'user_{challenge.from_user.id}'
+                },
+                'routine': {
+                    'id': challenge.routine.id,
+                    'name': challenge.routine.name,
+                },
+                'created_at': challenge.created_at,
+                'responded_at': challenge.responded_at
+            })
+        
+        return Response({
+            'success': True,
+            'challenges': challenges_data
+        }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        return Response({
+            'success': False,
+            'error': f'An error occurred: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def add_fitness_goals(request):
+    try:
+        goals = request.data.get('goals', [])
+
+        if not isinstance(goals, list):
+            return Response({
+                'success': False,
+                'message': 'Goals must be provided as a list'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        if not goals:
+            return Response({
+                'success': False,
+                'message': 'At least one goal must be selected'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        metadata, _ = UserMetadata.objects.get_or_create(
+            user=request.user,
+            defaults={'username': f'user_{request.user.id}'}
+        )
+
+        # Convert to integers if they're strings (for safety)
+        try:
+            goal_ids = [int(g) if isinstance(g, str) else g for g in goals]
+        except (ValueError, TypeError) as e:
+            return Response({
+                'success': False,
+                'message': 'Invalid goal ID format'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # Validate that all goals exist
+        valid_goals = FitnessGoal.objects.filter(id__in=goal_ids)
+        if valid_goals.count() != len(goal_ids):
+            return Response({
+                'success': False,
+                'message': 'One or more invalid goal IDs provided'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        metadata.fitness_goals.set(goal_ids)
+
+        return Response({
+            'success': True,
+            'message': 'Fitness goals updated successfully',
+            'goals': list(metadata.fitness_goals.values_list('id', flat=True))
+        }, status=status.HTTP_200_OK)
+
+    except Exception as e:
+        print(f"Error in add_fitness_goals: {traceback.format_exc()}")
+        return Response({
+            'success': False,
+            'error': str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def add_conditions(request):
+    try:
+        condition_ids = request.data.get('conditions', [])
+
+        if not isinstance(condition_ids, list):
+            return Response({
+                'success': False,
+                'message': 'Conditions must be provided as a list'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # Allow empty list (user might not have any conditions)
+        
+        metadata, _ = UserMetadata.objects.get_or_create(
+            user=request.user,
+            defaults={'username': f'user_{request.user.id}'}
+        )
+
+        # Convert to integers if they're strings (for safety)
+        try:
+            condition_ids_int = [int(c) if isinstance(c, str) else c for c in condition_ids]
+        except (ValueError, TypeError) as e:
+            return Response({
+                'success': False,
+                'message': 'Invalid condition ID format'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # Validate that all conditions exist (only if list is not empty)
+        if condition_ids_int:
+            valid_conditions = ConditionOrInjury.objects.filter(id__in=condition_ids_int)
+            if valid_conditions.count() != len(condition_ids_int):
+                return Response({
+                    'success': False,
+                    'message': 'One or more invalid condition IDs provided'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+        metadata.conditions_and_injuries.set(condition_ids_int)
+
+        return Response({
+            'success': True,
+            'message': 'Conditions updated successfully',
+            'conditions': condition_ids_int
+        }, status=status.HTTP_200_OK)
+
+    except Exception as e:
+        print(f"Error in add_conditions: {traceback.format_exc()}")
+        return Response({
+            'success': False,
+            'error': str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def get_fitness_goals(request):
+    try:
+        metadata, _ = UserMetadata.objects.get_or_create(
+            user=request.user,
+            defaults={'username': f'user_{request.user.id}'}
+        )
+
+        return Response({
+            'success': True,
+            'goals': list(
+                metadata.fitness_goals.values('id', 'key', 'label')
+            )
+        }, status=status.HTTP_200_OK)
+
+    except Exception as e:
+        return Response({
+            'success': False,
+            'error': str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def get_conditions(request):
+    try:
+        metadata, _ = UserMetadata.objects.get_or_create(
+            user=request.user,
+            defaults={'username': f'user_{request.user.id}'}
+        )
+
+        return Response({
+            'success': True,
+            'conditions': list(
+                metadata.conditions_and_injuries.values('id', 'key', 'label')
+            )
+        }, status=status.HTTP_200_OK)
+
+    except Exception as e:
+        return Response({
+            'success': False,
+            'error': str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def get_all_conditions(request):
+    try:
+        conditions = ConditionOrInjury.objects.all()
+        serializer = ConditionOrInjurySerializer(conditions, many=True)
+        
+        return Response({
+            'success': True,
+            'conditions': serializer.data
+        }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        return Response({
+            'success': False,
+            'error': str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def get_all_goals(request):
+    try:
+        goals = FitnessGoal.objects.all()
+        serializer = FitnessGoalSerializer(goals, many=True)
+        
+        return Response({
+            'success': True,
+            'goals': serializer.data
+        }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        return Response({
+            'success': False,
+            'error': str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def generate_personalized_workout(request):
+    try:
+        user = request.user
+        metadata, _ = UserMetadata.objects.get_or_create(
+            user=user,
+            defaults={'username': f'user_{user.id}'}
+        )
+
+        # Get user's fitness goals and conditions
+        fitness_goals = list(
+            metadata.fitness_goals.values_list('key', flat=True)
+        )
+        conditions = list(
+            metadata.conditions_and_injuries.values_list('key', flat=True)
+        )
+
+        print(f"User {user.id} - Goals: {fitness_goals}, Conditions: {conditions}")
+
+        # Validate that user has set goals
+        if not fitness_goals:
+            return Response({
+                'success': False,
+                'error': 'Please set your fitness goals first'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # Fetch all workouts from database
+        workouts_queryset = Workout.objects.select_related('muscle_group').all()
+        
+        if not workouts_queryset.exists():
+            return Response({
+                'success': False,
+                'error': 'No workouts available in the system. Please contact support.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        workouts_data = []
+        for workout in workouts_queryset:
+            workouts_data.append({
+                'id': workout.id,
+                'name': workout.name,
+                'target_muscle_group': workout.muscle_group.name if workout.muscle_group else '',
+                'exercise_type': workout.exercise_type,
+                'experience_level': workout.experience_level,
+                'video_url': workout.video_url if hasattr(workout, 'video_url') else ''
+            })
+
+        print(f"Found {len(workouts_data)} workouts in database")
+
+        # Get user's experience level - add default if field doesn't exist
+        experience_level = getattr(metadata, 'experience_level', 'beginner')
+        if experience_level not in ['beginner', 'intermediate', 'advanced', 'expert']:
+            experience_level = 'beginner'
+
+        print(f"User experience level: {experience_level}")
+
+        # Build user profile
+        user_profile = {
+            'goals': fitness_goals,
+            'conditions': conditions,
+            'experience_level': experience_level
+        }
+
+        # Initialize recommendation engine
+        try:
+            engine = WorkoutRecommendationEngine(workouts_data, user_profile)
+            print("Recommendation engine initialized")
+        except Exception as init_error:
+            print(f"Error initializing engine: {traceback.format_exc()}")
+            return Response({
+                'success': False,
+                'error': f'Error initializing recommendation engine: {str(init_error)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+        # Generate routines
+        try:
+            routines_data = engine.generate_routines(num_routines=3, workouts_per_routine=5)
+            print(f"Generated {len(routines_data)} routine templates")
+        except Exception as engine_error:
+            print(f"Error generating routines: {traceback.format_exc()}")
+            return Response({
+                'success': False,
+                'error': f'Error generating routines: {str(engine_error)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        if not routines_data:
+            return Response({
+                'success': False,
+                'error': 'Could not generate suitable routines. Please try different goals or conditions.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # Save routines to database using transaction for data integrity
+        created_routines = []
+        
+        with transaction.atomic():
+            for routine_data in routines_data:
+                try:
+                    # Create the Routine
+                    routine = Routine.objects.create(
+                        user=user,
+                        name=routine_data['name'],
+                        description=routine_data['description'],
+                        is_public=False
+                    )
+                    
+                    print(f"Created routine: {routine.name}")
+                    
+                    # Create RoutineWorkouts for each workout
+                    workouts_created = 0
+                    for order, workout_config in enumerate(routine_data['workouts'], start=1):
+                        try:
+                            workout_id = workout_config.get('workout_id')
+                            if not workout_id:
+                                print(f"Warning: No workout_id in config: {workout_config}")
+                                continue
+                                
+                            workout = Workout.objects.get(id=workout_id)
+                            
+                            RoutineWorkout.objects.create(
+                                routine=routine,
+                                workout=workout,
+                                order=order,
+                                workout_mode=workout_config.get('workout_mode', 'reps_sets'),
+                                custom_sets=workout_config.get('custom_sets'),
+                                custom_reps=workout_config.get('custom_reps'),
+                                timer_duration=workout_config.get('timer_duration'),
+                                duration_minutes=workout_config.get('duration_minutes'),
+                                rest_between_sets=workout_config.get('rest_between_sets', 60),
+                                notes=f"Recommended workout for {routine_data.get('type', 'fitness')}"
+                            )
+                            workouts_created += 1
+                            
+                        except Workout.DoesNotExist:
+                            print(f"Warning: Workout {workout_id} does not exist, skipping")
+                            continue
+                        except Exception as workout_error:
+                            print(f"Error creating routine workout: {traceback.format_exc()}")
+                            continue
+                    
+                    if workouts_created > 0:
+                        created_routines.append(routine)
+                        print(f"Added {workouts_created} workouts to routine {routine.name}")
+                    else:
+                        # Delete routine if no workouts were added
+                        routine.delete()
+                        print(f"Deleted routine {routine.name} - no workouts added")
+                        
+                except Exception as routine_error:
+                    print(f"Error creating routine: {traceback.format_exc()}")
+                    continue
+
+        if not created_routines:
+            return Response({
+                'success': False,
+                'error': 'Failed to create any routines. Please try again or contact support.'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        # Serialize and return
+        serializer = RoutineDetailSerializer(created_routines, many=True)
+        
+        print(f"Successfully created {len(created_routines)} routines")
+        
+        return Response({
+            'success': True,
+            'message': f'Successfully generated {len(created_routines)} personalized routines',
+            'routines': serializer.data
+        }, status=status.HTTP_201_CREATED)
+
+    except Exception as e:
+        # Log the full error for debugging
+        print(f"Full error traceback in generate_personalized_workout:\n{traceback.format_exc()}")
+        
+        return Response({
+            'success': False,
+            'error': f'An error occurred: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['DELETE'])
+@permission_classes([permissions.IsAuthenticated])
+def delete_goals(request):
+    try:
+        metadata = get_object_or_404(UserMetadata, user=request.user)
+        metadata.fitness_goals.clear()
+        
+        return Response({
+            'success': True,
+            'message': 'All fitness goals have been removed'
+        }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        return Response({
+            'success': False,
+            'error': f'An error occurred: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+@api_view(['DELETE'])
+@permission_classes([permissions.IsAuthenticated])
+def delete_conditions(request):
+    try:
+        metadata = get_object_or_404(UserMetadata, user=request.user)
+        metadata.conditions_and_injuries.clear()
+        
+        return Response({
+            'success': True,
+            'message': 'All conditions and injuries have been removed'
+        }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        return Response({
+            'success': False,
+            'error': f'An error occurred: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])

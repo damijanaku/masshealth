@@ -572,18 +572,18 @@ int main(void)
             HAL_GPIO_WritePin(GPIOE, GPIO_PIN_10, GPIO_PIN_SET);
 
             // Connect to WiFi
-            if (ESP_SendCommand("AT+CWJAP=\"Hola\",\"69420112\"\r\n", "OK", 15000))
+            if (ESP_SendCommand("AT+CWJAP=\"Wifi_name\",\"Password\"\r\n", "OK", 15000))
             {
                 // WiFi connected successfully
                 HAL_GPIO_WritePin(GPIOE, GPIO_PIN_14, GPIO_PIN_SET);
                 DEBUG_LOG("WiFi connected successfully!");
 
 
-                if(ESP_MQTT_Connect_TLS("9f03cca8588b48b59bb6aad74976ac95.s1.eu.hivemq.cloud",
+                if(ESP_MQTT_Connect_TLS("Mqtt link",
                                         8883,
-                                        "6", // change this with massheslth_clientid
-                                        "fitness_app_client", // enter username for mqtt connection
-                                        "#iVYhAS-2B\\\"WihRr")) // enter password for mqtt connection, if u have this character " in password use \\\"
+                                        "clientId", // change this with massheslth_clientid
+                                        "username", // enter username for mqtt connection
+                                        "password")) // enter password for mqtt connection, if u have this character " in password use \\\"
                 {
                     //HAL_GPIO_WritePin(GPIOE, LD6_Pin, GPIO_PIN_SET);
 

@@ -27,6 +27,11 @@ def profile_image_path(instance, filename):
     filename = f"{uuid.uuid4()}.{ext}"
     return f'profile_images/user_{instance.user.id}/{filename}'
 
+def sound_file_path(instance, filename):
+    ext = filename.split('.')[-1]
+    filename = f"{uuid.uuid4()}.{ext}"
+    return f'sounds/{filename}'
+
 class SyncToSupabaseMixin(models.Model):
     """Mixin to handle Supabase synchronization"""
     synced_at = models.DateTimeField(null=True, blank=True)
@@ -105,6 +110,13 @@ class SyncToSupabaseMixin(models.Model):
                 
                 create_dict['id'] = self.pk
                 self.__class__.objects.using('supabase').create(**create_dict)
+            
+            # Update sync status locally
+            self.__class__.objects.using('default').filter(pk=self.pk).update(
+                synced_at=timezone.now(),
+                sync_status='synced'
+            )
+            logger.info(f"Synced {self.__class__.__name__} {self.pk} to Supabase")
             
         except Exception as e:
             # Mark as failed
@@ -545,12 +557,36 @@ class RoutineWorkout(SyncToSupabaseMixin, models.Model):
                 'timer_duration': 'Timer duration is required when using timer mode'
             })
             
+class UserCondition(SyncToSupabaseMixin, models.Model):
+    user_metadata = models.ForeignKey(
+        UserMetadata, 
+        on_delete=models.CASCADE, 
+        db_column='usermetadata_id'
+    )
+    condition = models.ForeignKey(
+        ConditionOrInjury, 
+        on_delete=models.CASCADE, 
+        db_column='conditionorinjury_id'
+    )
+    
+    class Meta:
+        unique_together = ('user_metadata', 'condition')
+        db_table = 'masshealth_metadata_conditions'
 
-def sound_file_path(instance, filename):
-    ext = filename.split('.')[-1]
-    filename = f"{uuid.uuid4()}.{ext}"
-    return f'sounds/{filename}'
-
+class UserFitnessGoal(SyncToSupabaseMixin, models.Model): 
+    user_metadata = models.ForeignKey(
+        UserMetadata, 
+        on_delete=models.CASCADE, 
+        db_column='usermetadata_id'
+    ) 
+    fitness_goal = models.ForeignKey(
+        FitnessGoal, 
+        on_delete=models.CASCADE, 
+        db_column='fitnessgoal_id'
+    ) 
+    class Meta:
+        unique_together = ('user_metadata', 'fitness_goal') 
+        db_table = 'masshealth_metadata_fitness_goals'
 
 class Sound(models.Model):
     """Sound/audio file model for workout soundbites"""

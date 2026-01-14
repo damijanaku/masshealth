@@ -8,8 +8,6 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
-#include <string.h>
-#include <stdio.h>
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -34,6 +32,11 @@
 #else
 #define USER_LOG(fmt, ...)
 #endif
+
+#define LSM303DLHC_ACC_ADDR     (0x19 << 1)
+#define LSM303_CTRL_REG1_A      0x20
+#define LSM303_CTRL_REG4_A      0x23
+#define LSM303_OUT_X_L_A        0x28
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -51,6 +54,8 @@ I2C_HandleTypeDef hi2c1;
 
 SPI_HandleTypeDef hspi1;
 
+TIM_HandleTypeDef htim2;
+
 UART_HandleTypeDef huart1;
 UART_HandleTypeDef huart2;
 
@@ -59,6 +64,12 @@ PCD_HandleTypeDef hpcd_USB_FS;
 /* USER CODE BEGIN PV */
 char esp_rx_buffer[ESP_RX_BUFFER_SIZE];
 uint8_t mqtt_packet[MQTT_PACKET_SIZE];
+
+volatile uint32_t step_count = 0;
+float filtered_accel = 0;
+float prev_filtered_accel = 0;
+uint8_t step_detected = 0;
+uint32_t last_step_time = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -69,14 +80,7 @@ static void MX_SPI1_Init(void);
 static void MX_USB_PCD_Init(void);
 static void MX_USART1_UART_Init(void);
 static void MX_USART2_UART_Init(void);
-static int ESP_SendCommand(const char* command, const char* ack, uint32_t timeout);
-static int ESP_SendBinary(const uint8_t* data, uint16_t len, const char* ack, uint32_t timeout);
-static int MQTT_BuildConnect(uint8_t *packet, const char *clientID, const char *username, const char *password, uint16_t keepalive);
-static int ESP_MQTT_Connect(const char *broker, uint16_t port, const char *clientID, const char *username, const char *password, uint16_t keepalive);
-static int MQTT_BuildPublish(uint8_t *packet, const char *topic, const char *message, uint8_t qos);
-static int ESP_MQTT_Publish(const char *topic, const char *message, uint8_t qos);
-static int ESP_HTTP_Login(const char *url, const char *username, const char *password);
-
+static void MX_TIM2_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -410,6 +414,98 @@ static int ESP_MQTT_Publish_AT(const char *topic, const char *message, uint8_t q
 	return 1;
 }
 
+static int LSM303_Init(void)
+{
+    uint8_t data[2];
+    HAL_StatusTypeDef status;
+
+    // CTRL_REG1_A: 100Hz data rate, all axes enabled
+    data[0] = LSM303_CTRL_REG1_A;
+    data[1] = 0x57;  // 100Hz, normal mode, XYZ enabled
+    status = HAL_I2C_Master_Transmit(&hi2c1, LSM303DLHC_ACC_ADDR, data, 2, 100);
+    if (status != HAL_OK) {
+        USER_LOG("LSM303 CTRL_REG1 write failed");
+        return 0;
+    }
+
+    // CTRL_REG4_A: +/- 2g full scale, high resolution
+    data[0] = LSM303_CTRL_REG4_A;
+    data[1] = 0x08;  // +/- 2g, high resolution
+    status = HAL_I2C_Master_Transmit(&hi2c1, LSM303DLHC_ACC_ADDR, data, 2, 100);
+    if (status != HAL_OK) {
+        USER_LOG("LSM303 CTRL_REG4 write failed");
+        return 0;
+    }
+
+    USER_LOG("LSM303 Accelerometer initialized");
+    return 1;
+}
+
+static int LSM303_ReadAccel(int16_t *x, int16_t *y, int16_t *z)
+{
+    uint8_t reg = LSM303_OUT_X_L_A | 0x80;  // Auto-increment
+    uint8_t buffer[6];
+
+    if (HAL_I2C_Master_Transmit(&hi2c1, LSM303DLHC_ACC_ADDR, &reg, 1, 100) != HAL_OK) {
+        return 0;
+    }
+
+    if (HAL_I2C_Master_Receive(&hi2c1, LSM303DLHC_ACC_ADDR, buffer, 6, 100) != HAL_OK) {
+        return 0;
+    }
+
+    // Combine bytes (12-bit left-justified, so shift right by 4)
+    *x = (int16_t)((buffer[1] << 8) | buffer[0]) >> 4;
+    *y = (int16_t)((buffer[3] << 8) | buffer[2]) >> 4;
+    *z = (int16_t)((buffer[5] << 8) | buffer[4]) >> 4;
+
+    return 1;
+}
+
+static void StepCounter_Update(void)
+{
+    int16_t ax, ay, az;
+    float magnitude;
+    uint32_t current_time;
+
+    if (!LSM303_ReadAccel(&ax, &ay, &az)) {
+        // Blink LD4 if read fails
+        HAL_GPIO_TogglePin(GPIOE, LD4_Pin);
+        return;
+    }
+
+    //
+    HAL_GPIO_TogglePin(GPIOE, LD7_Pin);
+    // Calculate acceleration magnitude
+    magnitude = sqrt((float)(ax*ax + ay*ay + az*az));
+
+    // Low-pass filter to smooth the signal
+    filtered_accel = 0.8f * filtered_accel + 0.2f * magnitude;
+
+    current_time = HAL_GetTick();
+
+    // Peak detection for step counting
+    // Threshold and timing to avoid double-counting
+    if (filtered_accel > 1200.0f &&                          // Above threshold
+        prev_filtered_accel <= 1200.0f &&                    // Rising edge
+        (current_time - last_step_time) > 250)            // Min 250ms between steps
+    {
+        step_count++;
+        last_step_time = current_time;
+        USER_LOG("Step detected! Count: %lu", step_count);
+
+        HAL_GPIO_TogglePin(GPIOE, LD3_Pin);
+    }
+
+    prev_filtered_accel = filtered_accel;
+}
+
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+    if (htim->Instance == TIM2) {
+        StepCounter_Update();
+    }
+}
 
 /* USER CODE END 0 */
 
@@ -447,22 +543,30 @@ int main(void)
   MX_USB_PCD_Init();
   MX_USART1_UART_Init();
   MX_USART2_UART_Init();
+  MX_TIM2_Init();
   /* USER CODE BEGIN 2 */
   HAL_Delay(1000); // Wait for ESP to be ready
   ESP_SendCommand("ATE0\r\n", "OK", 2000);
   ESP_SendCommand("AT+MQTTCLEAN=0\r\n", "OK", 1000);
   HAL_Delay(500);
-
+  LSM303_Init();
+  HAL_Delay(100);
+  HAL_TIM_Base_Start_IT(&htim2);
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
     {
-        /* USER CODE END WHILE */
-        /* USER CODE BEGIN 3 */
+    /* USER CODE END WHILE */
 
-	  	// in this code i prepared MQTT over TLS, this is secure, we have username and password, i also have functions for MQTT over tcp - less safe
+    /* USER CODE BEGIN 3 */
+	    StepCounter_Update();
+	    HAL_Delay(10);
+
+	    static uint32_t last_network_check = 0;
+
+	    // in this code i prepared MQTT over TLS, this is secure, we have username and password, i also have functions for MQTT over tcp - less safe
         if (ESP_SendCommand("AT\r\n", "OK", 2000))
         {
             HAL_GPIO_WritePin(GPIOE, GPIO_PIN_10, GPIO_PIN_SET);
@@ -477,17 +581,20 @@ int main(void)
 
                 if(ESP_MQTT_Connect_TLS("9f03cca8588b48b59bb6aad74976ac95.s1.eu.hivemq.cloud",
                                         8883,
-                                        "masshealth_sensornum", // change this with massheslth_clientid
-                                        "username", // enter username for mqtt connection
-                                        "password")) // enter password for mqtt connection, if u have this character " in password use \\\"
+                                        "6", // change this with massheslth_clientid
+                                        "fitness_app_client", // enter username for mqtt connection
+                                        "#iVYhAS-2B\\\"WihRr")) // enter password for mqtt connection, if u have this character " in password use \\\"
                 {
                     //HAL_GPIO_WritePin(GPIOE, LD6_Pin, GPIO_PIN_SET);
-                }
-                if(ESP_MQTT_Publish_AT("sensor/test", "bobi", 0)){
-                	USER_LOG("Published message to topic 'esp'");
+
                 }
 
+                char step_msg[32];
+                snprintf(step_msg, sizeof(step_msg), "%lu", step_count);
 
+                if(ESP_MQTT_Publish_AT("sensor/steps", step_msg, 0)){
+                    USER_LOG("Published steps: %lu", step_count);
+                }
 
             }
             else
@@ -506,8 +613,9 @@ int main(void)
         HAL_Delay(5000);
     }
 
-    /* USER CODE END 3 */
-  }
+
+  /* USER CODE END 3 */
+}
 
 /**
   * @brief System Clock Configuration
@@ -649,6 +757,51 @@ static void MX_SPI1_Init(void)
 }
 
 /**
+  * @brief TIM2 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM2_Init(void)
+{
+
+  /* USER CODE BEGIN TIM2_Init 0 */
+
+  /* USER CODE END TIM2_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM2_Init 1 */
+
+  /* USER CODE END TIM2_Init 1 */
+  htim2.Instance = TIM2;
+  htim2.Init.Prescaler = 47999;
+  htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim2.Init.Period = 9;
+  htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
+  if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim2, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim2, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM2_Init 2 */
+
+  /* USER CODE END TIM2_Init 2 */
+
+}
+
+/**
   * @brief USART1 Initialization Function
   * @param None
   * @retval None
@@ -770,7 +923,7 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOE, CS_I2C_SPI_Pin|LD4_Pin|LD3_Pin|GPIO_PIN_10|GPIO_PIN_14|GPIO_PIN_12
+  HAL_GPIO_WritePin(GPIOE, CS_I2C_SPI_Pin|LD4_Pin|LD3_Pin|GPIO_PIN_10
                           |LD7_Pin|LD9_Pin|LD10_Pin|LD8_Pin
                           |LD6_Pin, GPIO_PIN_RESET);
 
@@ -785,7 +938,7 @@ static void MX_GPIO_Init(void)
   /*Configure GPIO pins : CS_I2C_SPI_Pin LD4_Pin LD3_Pin PE10
                            LD7_Pin LD9_Pin LD10_Pin LD8_Pin
                            LD6_Pin */
-  GPIO_InitStruct.Pin = CS_I2C_SPI_Pin|LD4_Pin|LD3_Pin|GPIO_PIN_10|GPIO_PIN_14|GPIO_PIN_12
+  GPIO_InitStruct.Pin = CS_I2C_SPI_Pin|LD4_Pin|LD3_Pin|GPIO_PIN_10
                           |LD7_Pin|LD9_Pin|LD10_Pin|LD8_Pin
                           |LD6_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;

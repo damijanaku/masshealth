@@ -1,2 +1,18 @@
 .env.*
 .env
+
+# STM32CubeIDE build artifacts
+Debug/
+Release/
+*.elf
+*.map
+*.hex
+*.bin
+*.list
+*.cyclo
+*.su
+
+# IDE-specific user settings
+.metadata/
+.settings/
+.cache/

@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 import dj_database_url
 
 # Load environment variables from .env file
-BASE_DIR = Path(__file__).resolve().parent.parent
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 # Now use absolute path for .env
 env_path = BASE_DIR / '.env'

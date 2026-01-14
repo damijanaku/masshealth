@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, Pressable } from 'react-native'
+import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import React, { useEffect, useState } from 'react'
 import DefButton from '@/components/DefButton'
@@ -61,9 +61,16 @@ const injuriesEnter = () => {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <View style={styles.contentContainer}>
-        <Text style={styles.sectionTitleText}>Enter injuries/conditions (if you have them)?</Text>
+      <View style={styles.header}>
+        <Text style={styles.sectionTitleText}>Enter injuries/conditions (if needed)?</Text>
         <Text style={styles.subtitleText}>This helps us create personalized workouts for you</Text>
+      </View>
+
+      <ScrollView 
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollViewContent}
+        showsVerticalScrollIndicator={true}
+      >
         <View style={styles.buttonGroup}>
           {injuries.map(injury => (
             <Pressable
@@ -83,7 +90,7 @@ const injuriesEnter = () => {
             </Pressable>
           ))}
         </View>
-      </View>
+      </ScrollView>
       
       <View style={styles.continueButton}>
         <DefButton 
@@ -102,27 +109,32 @@ const injuriesEnter = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1, 
-    justifyContent: 'space-between',
   },
-  contentContainer: {
-    flex: 1,
-    justifyContent: 'center',
+  header: {
+    paddingTop: 10,
   },
   sectionTitleText: {
     fontWeight: '700',
     fontSize: 32,
     color: '#000000',
-    margin: 20
+    margin: 20,
+    marginBottom: 10
   },
   subtitleText: {
     fontWeight: '500',
     fontSize: 16,
     color: '#808080',
-    marginHorizontal: 21
+    marginHorizontal: 21,
+    marginBottom: 10
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollViewContent: {
+    paddingVertical: 10,
   },
   buttonGroup: {
     marginHorizontal: 5,
-    marginVertical: 10,
     padding: 5,
     flexDirection: 'row',
     flexWrap: 'wrap',

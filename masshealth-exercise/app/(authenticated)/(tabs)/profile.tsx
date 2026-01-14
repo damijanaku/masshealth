@@ -21,14 +21,15 @@ const height = Dimensions.get('window').height;
 
 interface PendingRequest {
   id: any;
-  status: any;
-  sender_id: any;
-  User_Metadata: {
-    user_id?: any;
+  status?: any;
+  sender_id?: any;
+  from_user: {  
+    id: any;     
     name: string;
     username: string;
   };
 }
+
 
 interface Friend {
   connectionId: any;
@@ -440,8 +441,12 @@ const Profile = () => {
                 renderItem={({ item }) => (
                   <View style={styles.requestItem}>
                     <View style={styles.requestUserInfo}>
-                      <Text style={styles.requestUserName}>{item.User_Metadata.name}</Text>
-                      <Text style={styles.requestUsername}>@{item.User_Metadata.username}</Text>
+                      <Text style={styles.requestUserName}>
+                        {item.from_user?.name || 'Unknown'}
+                      </Text>
+                      <Text style={styles.requestUsername}>
+                        @{item.from_user?.username || 'unknown'}
+                      </Text>
                     </View>
                     <TouchableOpacity 
                       style={styles.acceptButton} 
